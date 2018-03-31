@@ -41,12 +41,11 @@ class ChargerServer(port: Int) {
 
     def handleRequest(req: HttpRequest): Future[HttpResponse] = {
       OcppProcessing[ChargePointReq, ChargePointRes](req) {
-        case (chargerInfo: ChargerInfo, cpReq: ChargePointReq) => {
+        case (chargerInfo: ChargerInfo, cpReq: ChargePointReq) =>
           map.get(chargerInfo.chargerId) match {
             case None => Future.failed(new NoSuchElementException(s"I am not charger ${chargerInfo.chargerId}"))
-            case Some(chargePoint) => Future.successful(chargePoint(cpReq))
+            case Some(chargePoint) => chargePoint(cpReq)
           }
-        }
       }
     }
   }

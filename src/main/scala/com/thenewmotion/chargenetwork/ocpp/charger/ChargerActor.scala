@@ -1,12 +1,15 @@
 package com.thenewmotion.chargenetwork.ocpp.charger
 
 import akka.actor._
+import com.thenewmotion.ocpp.messages.UpdateStatusWithoutHash.VersionMismatch
+
 import scala.concurrent.duration._
 import com.thenewmotion.ocpp.messages._
+
 import scala.concurrent.Future
 import scala.language.postfixOps
 
-class ChargerActor(service: BosService, numberOfConnectors: Int = 1)
+class ChargerActor(val service: BosService, val numberOfConnectors: Int = 1, val chargerConfig: ChargerConfig)
   extends Actor
   with LoggingFSM[ChargerActor.State, ChargerActor.Data] {
 
@@ -14,10 +17,12 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1)
   import context.dispatcher
 
   var localAuthList = LocalAuthList()
-  var configuration = Map[String, (Boolean, Option[String])](
+  var configuration: Map[String, (Boolean, Option[String])] = Map[String, (Boolean, Option[String])](
     ("chargerId", (true, Some(service.chargerId))),
     ("numberOfConnectors", (true, Some(numberOfConnectors.toString))),
-    ("OCPP-Simulator", (true, None)))
+    ("OCPP-Simulator", (true, Some(""))),
+    ("AuthorizeRemoteTxRequests", (false, Some(true.toString)))
+  )
 
   override def preStart() {
     val interval = service.boot()
@@ -31,7 +36,8 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1)
   }
 
   def scheduleFault() {
-    context.system.scheduler.scheduleOnce(30 seconds, self, Fault)
+    if (chargerConfig.simulateFailure())
+      context.system.scheduler.scheduleOnce(30 seconds, self, Fault)
   }
 
   startWith(Available, NoData)
@@ -64,9 +70,12 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1)
       sender ! GetLocalListVersionRes(localAuthList.version)
       stay()
 
-    case Event(SendLocalListReq(updateType: UpdateType.Value, version, localAuthorisationList, _), _) =>
+    case Event(ClearCacheReq, _) =>
+      sender ! ClearCacheRes(true)
+      stay()
 
-      import UpdateStatus._
+    case Event(SendLocalListReq(updateType: UpdateType, version, localAuthorisationList, _), _) =>
+
       val status = if (version.version <= localAuthList.version.version) VersionMismatch
       else {
         localAuthList = LocalAuthList(
@@ -81,7 +90,7 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1)
               case (data, AuthorisationRemove(idTag)) => data - idTag
             }
           })
-        UpdateAccepted(None)
+        UpdateStatusWithHash.Accepted(None)
       }
 
       sender ! SendLocalListRes(status)

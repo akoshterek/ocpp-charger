@@ -7,16 +7,7 @@ import com.thenewmotion.ocpp.messages.ChargePointErrorCode
  */
 object ErrorCodes {
 
-  import ChargePointErrorCode._
+  private val codes: List[ChargePointErrorCode] = ChargePointErrorCode.values.toList
 
-  private val codes = List(
-    ConnectorLockFailure,
-    HighTemperature,
-    Mode3Error,
-    PowerMeterFailure,
-    PowerSwitchFailure,
-    ReaderFailure,
-    ResetFailure)
-
-  def apply(): Stream[ChargePointErrorCode.Value] = codes.toStream #::: apply()
+  def apply(): Stream[ChargePointErrorCode] = codes.toStream #::: apply()
 }

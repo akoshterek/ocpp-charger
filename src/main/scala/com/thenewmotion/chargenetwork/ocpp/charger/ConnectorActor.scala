@@ -2,7 +2,6 @@ package com.thenewmotion.chargenetwork.ocpp.charger
 
 import akka.actor._
 import scala.concurrent.duration._
-import scala.language.postfixOps
 
 class ConnectorActor(service: ConnectorService)
   extends Actor
@@ -24,6 +23,7 @@ class ConnectorActor(service: ConnectorService)
         goto(Charging) using ChargingData(sessionId, initialMeterValue)
       }
       else stay()
+
     case Event(Unplug, _) =>
       service.available()
       goto(Available)
@@ -34,16 +34,20 @@ class ConnectorActor(service: ConnectorService)
       if (service.authorize(rfid) && service.stopSession(Some(rfid), transactionId, meterValue))
         goto(Connected) using NoData
       else stay()
-    case Event(SendMeterValue, ChargingData(transactionId, meterValue)) => {
+
+    case Event(SendMeterValue, ChargingData(transactionId, meterValue)) =>
       log.debug("Sending meter value")
       service.meterValue(transactionId, meterValue)
       stay() using ChargingData(transactionId, meterValue + 1)
-    }
+
     case Event(_: Action, _) => stay()
   }
 
   onTransition {
-    case _ -> Charging => { log.debug("Setting timer for meterValue"); setTimer("meterValueTimer", SendMeterValue, 20 seconds, true) }
+    case _ -> Charging =>
+      log.debug("Setting timer for meterValue")
+      setTimer("meterValueTimer", SendMeterValue, 20.seconds, repeat = true)
+
     case Charging -> _ => cancelTimer("meterValueTimer")
   }
 
