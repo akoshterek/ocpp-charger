@@ -1,6 +1,6 @@
 package com.thenewmotion.chargenetwork.ocpp.charger
 
-import org.rogach.scallop.{ScallopConf, ScallopOption}
+import org.rogach.scallop.ScallopConf
 
 object ChargerConfig {
   def apply(args: Seq[String]): ChargerConfig = new ChargerConfig(args)
@@ -11,7 +11,7 @@ class ChargerConfig(args: Seq[String]) extends ScallopConf(args) {
   val numberOfConnectors = opt[Int]("connectors", descr = "Number of connectors of emulated charge point", default = Some(2))
   val vendor = opt[String]("vendor", descr = "Charge point vendor", default = Some("The New Motion"))
   val model = opt[String]("model", descr = "Charge point model", default = Some("OCPP-Simulator"))
-  val serial = opt[String]("serial", descr = "Charge point serial number", default = Some("OCPPSIM-0001"))
+  val serial = opt[String]("serial", descr = "Charge point serial number", default = Some("00055103978E"))
   val firmwareVersion = opt[String]("firmware-version", descr = "Charge point firmware version", default = Some("OCPPSIM-0.1"))
   val iccid = opt[String]("iccid", descr = "Charge point SIM card ICCID", default = None)
   val imsi = opt[String]("imsi", descr = "Charge point SIM card IMSI", default = None)

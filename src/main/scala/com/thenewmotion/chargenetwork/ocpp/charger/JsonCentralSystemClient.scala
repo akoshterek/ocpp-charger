@@ -21,17 +21,19 @@ object JsonCentralSystemClient {
   def apply(chargeBoxIdentity: String,
             version: Version,
             centralSystemUri: URI,
-            authPassword: Option[String]
+            authPassword: Option[String],
+            config: ChargerConfig
            )(implicit sslContext: SSLContext = SSLContext.getDefault): CentralSystemClient = version match {
-    case Version.V16 => new JsonCentralSystemClientV16(chargeBoxIdentity, centralSystemUri, authPassword)(sslContext)
+    case Version.V16 => new JsonCentralSystemClientV16(chargeBoxIdentity, centralSystemUri, authPassword, config)(sslContext)
     case _ => throw new IllegalArgumentException("Wrong OCPP version")
   }
 }
 
 class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
-                              centralSystemUri: URI,
-                              authPassword: Option[String])
-                             (implicit sslContext: SSLContext = SSLContext.getDefault)
+                                 centralSystemUri: URI,
+                                 authPassword: Option[String],
+                                 config: ChargerConfig)
+                                (implicit sslContext: SSLContext = SSLContext.getDefault)
   extends CentralSystemClient with LazyLogging {
 
   def version: Version.V16.type = Version.V16
@@ -116,10 +118,9 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
 
   def askCharger[REQ <: ChargePointReq, RES <: ChargePointRes](req: REQ)
                                                               (implicit tag: ClassTag[RES]): Future[RES] = {
-    import OcppCharger.CHARGER_ACTOR_NAME
     import akka.pattern.AskableActorSelection
 
-    new AskableActorSelection(system.actorSelection("user/" + CHARGER_ACTOR_NAME))
+    new AskableActorSelection(system.actorSelection("user/" + config.chargerId()))
       .ask(req)(30.seconds)
       .asInstanceOf[Future[RES]]
   }

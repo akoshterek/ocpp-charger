@@ -8,10 +8,6 @@ import akka.actor.{ActorRef, Props}
 import com.thenewmotion.ocpp.soap.CentralSystemClient
 import com.thenewmotion.ocpp.Version
 
-object OcppCharger {
-  val CHARGER_ACTOR_NAME: String = "chargerActor"
-}
-
 trait OcppCharger {
   def chargerActor: ActorRef
 }
@@ -25,7 +21,7 @@ class OcppSoapCharger(chargerId: String,
                       http: Http = new Http) extends OcppCharger {
 
   val client = CentralSystemClient(chargerId, ocppVersion, centralSystemUri, http, Some(server.url))
-  val chargerActor = system.actorOf(Props(new ChargerActor(BosService(chargerId, client, config), numConnectors, config)), OcppCharger.CHARGER_ACTOR_NAME)
+  val chargerActor = system.actorOf(Props(new ChargerActor(BosService(chargerId, client, config), numConnectors, config)), config.chargerId())
   server.actor ! ChargerServer.Register(chargerId, new ChargePointService(chargerId, chargerActor))
 }
 
@@ -35,6 +31,6 @@ class OcppJsonCharger(chargerId: String,
                       authPassword: Option[String],
                       config: ChargerConfig)
                      (implicit sslContext: SSLContext = SSLContext.getDefault) extends OcppCharger {
-  val client = JsonCentralSystemClient(chargerId, Version.V16, centralSystemUri, authPassword)
-  val chargerActor = system.actorOf(Props(new ChargerActor(BosService(chargerId, client, config), numConnectors, config)), OcppCharger.CHARGER_ACTOR_NAME)
+  val client = JsonCentralSystemClient(chargerId, Version.V16, centralSystemUri, authPassword, config)
+  val chargerActor = system.actorOf(Props(new ChargerActor(BosService(chargerId, client, config), numConnectors, config)), config.chargerId())
 }

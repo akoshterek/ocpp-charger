@@ -6,10 +6,10 @@ import com.thenewmotion.ocpp.messages.UpdateStatusWithoutHash.VersionMismatch
 import scala.concurrent.duration._
 import com.thenewmotion.ocpp.messages._
 
-import scala.concurrent.Future
+import scala.concurrent.{Await, Future}
 import scala.language.postfixOps
 
-class ChargerActor(val service: BosService, val numberOfConnectors: Int = 1, val chargerConfig: ChargerConfig)
+class ChargerActor(val service: BosService, val numberOfConnectors: Int = 1, val config: ChargerConfig)
   extends Actor
   with LoggingFSM[ChargerActor.State, ChargerActor.Data] {
 
@@ -17,7 +17,7 @@ class ChargerActor(val service: BosService, val numberOfConnectors: Int = 1, val
   import context.dispatcher
 
   var localAuthList = LocalAuthList()
-  var configuration: Map[String, (Boolean, Option[String])] = Map[String, (Boolean, Option[String])](
+  var chargerParameters: Map[String, (Boolean, Option[String])] = Map[String, (Boolean, Option[String])](
     ("chargerId", (true, Some(service.chargerId))),
     ("numberOfConnectors", (true, Some(numberOfConnectors.toString))),
     ("OCPP-Simulator", (true, Some(""))),
@@ -36,7 +36,7 @@ class ChargerActor(val service: BosService, val numberOfConnectors: Int = 1, val
   }
 
   def scheduleFault() {
-    if (chargerConfig.simulateFailure())
+    if (config.simulateFailure())
       context.system.scheduler.scheduleOnce(30 seconds, self, Fault)
   }
 
@@ -98,12 +98,12 @@ class ChargerActor(val service: BosService, val numberOfConnectors: Int = 1, val
 
     case Event(GetConfigurationReq(keys), _) =>
       val (values: List[KeyValue], unknownKeys: List[String]) =
-        if (keys.isEmpty) configuration.map {
+        if (keys.isEmpty) chargerParameters.map {
           case (key, (readonly, value)) => KeyValue(key, readonly, value)
         }.toList -> Nil
         else {
           val data = keys.map {
-            key => key -> configuration.get(key).map {
+            key => key -> chargerParameters.get(key).map {
               case (readonly, value) => KeyValue(key, readonly, value)
             }
           }
@@ -120,10 +120,10 @@ class ChargerActor(val service: BosService, val numberOfConnectors: Int = 1, val
       stay()
 
     case Event(ChangeConfigurationReq(key, value), _) =>
-      val status = configuration.get(key) match {
+      val status = chargerParameters.get(key) match {
         case Some((true, _)) => ConfigurationStatus.Rejected
         case _ =>
-          configuration = configuration + (key -> (false -> Some(value)))
+          chargerParameters = chargerParameters + (key -> (false -> Some(value)))
           ConfigurationStatus.Accepted
       }
       sender ! ChangeConfigurationRes(status)
@@ -137,14 +137,19 @@ class ChargerActor(val service: BosService, val numberOfConnectors: Int = 1, val
   initialize()
 
   def startConnector(c: Int) {
-    context.actorOf(Props(new ConnectorActor(service.connector(c))), c.toString)
+    context.actorOf(Props(new ConnectorActor(service.connector(c))), connectorActorName(c))
   }
 
-  def connector(c: Int): ActorRef = context.actorFor(c.toString)
+  def connector(c: Int): ActorRef = {
+    val timeout = 5.seconds
+    Await.result(context.actorSelection("user/" + connectorActorName(c)).resolveOne(timeout), timeout)
+  }
 
   def dispatch(msg: ConnectorActor.Action, c: Int) {
     connector(c) ! msg
   }
+
+  private def connectorActorName(c: Int): String = config.chargerId() + "/" + c.toString
 }
 
 object ChargerActor {

@@ -51,8 +51,8 @@ class BosServiceImpl(val chargerId: String, protected val service: SyncCentralSy
   def boot(): FiniteDuration = service(BootNotificationReq(
     chargePointVendor = config.vendor(),
     chargePointModel = config.model(),
-    chargePointSerialNumber = Some(chargerId),
-    chargeBoxSerialNumber = Some(chargerId), //deprecated
+    chargePointSerialNumber = Some(config.serial()),
+    chargeBoxSerialNumber = None, //deprecated
     firmwareVersion = config.firmwareVersion.get,
     iccid = config.iccid.get,
     imsi = config.imsi.get,
