@@ -9,7 +9,7 @@ import com.thenewmotion.ocpp.messages._
 import scala.concurrent.{Await, Future}
 import scala.language.postfixOps
 
-class ChargerActor(val service: BosService, val numberOfConnectors: Int = 1, val config: ChargerConfig)
+class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: ChargerConfig)
   extends Actor
   with LoggingFSM[ChargerActor.State, ChargerActor.Data] {
 

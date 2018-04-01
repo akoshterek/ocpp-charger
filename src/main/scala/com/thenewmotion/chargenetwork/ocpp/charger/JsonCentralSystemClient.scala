@@ -7,9 +7,9 @@ import javax.net.ssl.SSLContext
 import com.thenewmotion.ocpp.Version
 import com.thenewmotion.ocpp.messages._
 
-import scala.concurrent.{Await, Future}
+import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext.Implicits.global
+//import scala.concurrent.ExecutionContext.Implicits.global
 import com.thenewmotion.ocpp.json._
 import com.thenewmotion.ocpp.json.api.{ChargePointRequestHandler, OcppError, OcppException}
 import com.thenewmotion.ocpp.json.api.client.OcppJsonClient

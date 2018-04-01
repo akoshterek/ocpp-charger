@@ -21,7 +21,9 @@ class OcppSoapCharger(chargerId: String,
                       http: Http = new Http) extends OcppCharger {
 
   val client = CentralSystemClient(chargerId, ocppVersion, centralSystemUri, http, Some(server.url))
-  val chargerActor = system.actorOf(Props(new ChargerActor(BosService(chargerId, client, config), numConnectors, config)), config.chargerId())
+  val chargerActor: ActorRef = system.actorOf(
+    Props(new ChargerActor(BosService(chargerId, client, config), numConnectors, config)),
+    ActorsResolver.name(config.chargerId()))
   server.actor ! ChargerServer.Register(chargerId, new ChargePointService(chargerId, chargerActor))
 }
 
@@ -32,5 +34,7 @@ class OcppJsonCharger(chargerId: String,
                       config: ChargerConfig)
                      (implicit sslContext: SSLContext = SSLContext.getDefault) extends OcppCharger {
   val client = JsonCentralSystemClient(chargerId, Version.V16, centralSystemUri, authPassword, config)
-  val chargerActor = system.actorOf(Props(new ChargerActor(BosService(chargerId, client, config), numConnectors, config)), config.chargerId())
+  val chargerActor: ActorRef = system.actorOf(
+    Props(new ChargerActor(BosService(chargerId, client, config), numConnectors, config)),
+    ActorsResolver.name(config.chargerId()))
 }
