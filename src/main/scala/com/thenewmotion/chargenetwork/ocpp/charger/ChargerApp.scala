@@ -3,9 +3,13 @@ package com.thenewmotion.chargenetwork.ocpp.charger
 import akka.actor.Props
 import com.thenewmotion.ocpp.Version
 import java.net.URI
-
 import java.util.Locale
+
+import akka.http.scaladsl.Http
+import akka.stream.ActorMaterializer
 import javax.net.ssl.SSLContext
+
+import scala.io.StdIn
 
 object ChargerApp {
 
@@ -55,6 +59,15 @@ object ChargerApp {
         c => system.actorOf(Props(new UserActor(charger.chargerActor, c, ActionIterator(config.passId()))))
       }
     }
+
+    implicit val materializer: ActorMaterializer = ActorMaterializer()
+    val bindingFuture = Http().bindAndHandle(JsonWebServer.route, "localhost", config.listenPort())
+
+    println("Server online at http://localhost:%d/\nPress RETURN to stop...".format(config.listenPort()))
+    StdIn.readLine() // let it run until user presses return
+    bindingFuture
+      .flatMap(_.unbind()) // trigger unbinding from the port
+      .onComplete(_ => system.terminate()) // and shutdown when done
   }
 
   sealed trait ConnectionType

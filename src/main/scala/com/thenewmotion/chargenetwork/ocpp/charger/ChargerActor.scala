@@ -14,7 +14,6 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
   with LoggingFSM[ChargerActor.State, ChargerActor.Data] {
 
   import ChargerActor._
-  import context.dispatcher
 
   var localAuthList = LocalAuthList()
   var chargerParameters: Map[String, (Boolean, Option[String])] = Map[String, (Boolean, Option[String])](
@@ -137,19 +136,16 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
   initialize()
 
   def startConnector(c: Int) {
-    context.actorOf(Props(new ConnectorActor(service.connector(c))), connectorActorName(c))
+    context.actorOf(Props(new ConnectorActor(service.connector(c))), ActorsResolver.name(config.chargerId(), c))
   }
 
   def connector(c: Int): ActorRef = {
-    val timeout = 5.seconds
-    Await.result(context.actorSelection("user/" + connectorActorName(c)).resolveOne(timeout), timeout)
+    ActorsResolver.resolve(config.chargerId(), c).get
   }
 
   def dispatch(msg: ConnectorActor.Action, c: Int) {
     connector(c) ! msg
   }
-
-  private def connectorActorName(c: Int): String = config.chargerId() + "/" + c.toString
 }
 
 object ChargerActor {

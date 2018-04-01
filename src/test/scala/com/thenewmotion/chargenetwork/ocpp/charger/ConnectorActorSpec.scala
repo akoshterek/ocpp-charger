@@ -1,13 +1,17 @@
 package com.thenewmotion.chargenetwork
 package ocpp.charger
 
+import java.util.concurrent.TimeUnit
+
 import org.specs2.mutable.SpecificationWithJUnit
 import akka.testkit.{TestFSMRef, TestKit}
 import org.specs2.mock.Mockito
 import org.specs2.specification.Scope
 import akka.actor.ActorSystem
 import ConnectorActor._
-import com.thenewmotion.chargenetwork.{ocpp => xb}
+
+import scala.concurrent.Await
+import scala.concurrent.duration.FiniteDuration
 
 /**
  * @author Yaroslav Klymko
@@ -88,8 +92,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
 
     "stop charging on termination" in new ConnectorActorScope {
       actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue))
-      system.shutdown()
-      system.awaitTermination()
+      Await.ready(system.terminate(), new FiniteDuration(5, TimeUnit.SECONDS))
 
       there was one(service).stopSession(None, 12345, ConnectorActor.initialMeterValue)
     }

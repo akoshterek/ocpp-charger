@@ -12,7 +12,7 @@ class UserActor(charger: ActorRef, c: Int, actions: ActionIterator) extends Acto
   case object Act
 
   override def preStart() {
-    context.system.scheduler.schedule(3 seconds, 2 seconds, self, Act)
+    context.system.scheduler.schedule(3 seconds, 2 seconds, self, Act)(executionContext)
   }
 
   def receive = {
