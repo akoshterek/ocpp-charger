@@ -19,27 +19,29 @@ object JsonWebServer {
           case Some (chargerActor) => path(IntNumber) { connectorId =>
             ActorsResolver.resolve(chargerId, connectorId) match {
               case None => complete(StatusCodes.NotFound, "Connector %d not found on charger %s".format(connectorId, chargerId))
-              case Some(connectorActor) => connectorActions(chargerActor, connectorActor, connectorId)
+              case Some(_) => connectorActions(chargerActor, connectorId)
             }
           }
-
         }
-        //complete(StatusCodes.NotFound)
-
       }
     }
 
-  private def connectorActions(chargerActor: ActorRef, connectorActor: ActorRef, connectorId: Int): Route = {
+  private def connectorActions(chargerActor: ActorRef, connectorId: Int): Route = {
+    import ChargerActor.{Plug, Unplug, SwipeCard}
+
     path("plug") {
-      connectorActor ! ChargerActor.Plug(connectorId)
+      chargerActor ! Plug(connectorId)
       complete(StatusCodes.Accepted, "Plug")
     } ~
     path("unplug") {
-      connectorActor ! ChargerActor.Unplug(connectorId)
+      chargerActor ! Unplug(connectorId)
       complete(StatusCodes.Accepted, "Unplug")
     } ~
     path("swipecard") {
-      complete("SwipeCard")
+      entity(as[String]) { rfid =>
+        chargerActor ! SwipeCard(connectorId, rfid)
+        complete(StatusCodes.Accepted, "SwipeCard")
+      }
     }
   }
 }
