@@ -10,6 +10,7 @@ import akka.stream.ActorMaterializer
 import javax.net.ssl.SSLContext
 
 import scala.io.StdIn
+import scala.util.{Failure, Success, Try}
 
 object ChargerApp {
 
@@ -25,49 +26,55 @@ object ChargerApp {
     val connectionType: ConnectionType = config.connectionType().toLowerCase(Locale.ENGLISH) match {
       case "json" => Json
       case "soap" => Soap
-      case _ => sys.error(s"Unknown connection type ${config.connectionType()}")
+      case s => sys.error(s"Unknown connection type $s")
     }
 
-    val url = new URI(config.chargeServerUrl())
-    val charger = if (connectionType == Json) {
-      new OcppJsonCharger(
-        config.chargerId(),
-        config.numberOfConnectors(),
-        url,
-        config.authPassword.get,
-        config
-      )(config.keystoreFile.get.fold(SSLContext.getDefault) { keystoreFile =>
-        SslContext(
-          keystoreFile,
-          config.keystorePassword()
+    Try {
+      val url = new URI(config.chargeServerUrl())
+      if (connectionType == Json) {
+        new OcppJsonCharger(
+          config.chargerId(),
+          config.numberOfConnectors(),
+          url,
+          config.authPassword.get,
+          config
+        )(config.keystoreFile.get.fold(SSLContext.getDefault) { keystoreFile =>
+          SslContext(keystoreFile, config.keystorePassword())
+        })
+      } else {
+        val server = new ChargerServer(config.listenPort())
+        new OcppSoapCharger(
+          config.chargerId(),
+          config.numberOfConnectors(),
+          version.get,
+          url,
+          server,
+          config
         )
-      })
-    } else {
-      val server = new ChargerServer(config.listenPort())
-      new OcppSoapCharger(
-        config.chargerId(),
-        config.numberOfConnectors(),
-        version.get,
-        url,
-        server,
-        config
-      )
-    }
-
-    if (config.simulateUser()) {
-      (0 until config.numberOfConnectors()) map {
-        c => system.actorOf(Props(new UserActor(charger.chargerActor, c, ActionIterator(config.passId()))))
       }
+    } match {
+      case Success(charger) =>
+        onChargerStarted(charger)
+      case Failure(_) =>
+        system.terminate()
     }
 
-    implicit val materializer: ActorMaterializer = ActorMaterializer()
-    val bindingFuture = Http().bindAndHandle(JsonWebServer.route, "localhost", config.listenPort())
+    def onChargerStarted(charger: OcppCharger): Unit = {
+      if (config.simulateUser()) {
+        (0 until config.numberOfConnectors()) map {
+          c => system.actorOf(Props(new UserActor(charger.chargerActor, c, ActionIterator(config.passId()))))
+        }
+      }
 
-    println("Server online at http://localhost:%d/\nPress RETURN to stop...".format(config.listenPort()))
-    StdIn.readLine() // let it run until user presses return
-    bindingFuture
-      .flatMap(_.unbind()) // trigger unbinding from the port
-      .onComplete(_ => system.terminate()) // and shutdown when done
+      implicit val materializer: ActorMaterializer = ActorMaterializer()
+      val bindingFuture = Http().bindAndHandle(JsonWebServer.route, "localhost", config.listenPort())
+
+      println("Server online at http://localhost:%d/\nPress RETURN to stop...".format(config.listenPort()))
+      StdIn.readLine() // let it run until user presses return
+      bindingFuture
+        .flatMap(_.unbind()) // trigger unbinding from the port
+        .onComplete(_ => system.terminate()) // and shutdown when done
+    }
   }
 
   sealed trait ConnectionType
