@@ -19,7 +19,7 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
   var chargerParameters: Map[String, (Boolean, Option[String])] = Map[String, (Boolean, Option[String])](
     ("chargerId", (true, Some(service.chargerId))),
     ("numberOfConnectors", (true, Some(numberOfConnectors.toString))),
-    ("OCPP-Simulator", (true, Some(""))),
+    ("OCPP-Simulator", (true, None)),
     ("AuthorizeRemoteTxRequests", (false, Some(true.toString)))
   )
 

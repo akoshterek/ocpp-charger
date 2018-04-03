@@ -117,11 +117,14 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
 
   def askCharger[REQ <: ChargePointReq, RES <: ChargePointRes](req: REQ)
                                                               (implicit tag: ClassTag[RES]): Future[RES] = {
-    import akka.pattern.AskableActorSelection
+    import akka.pattern.ask
 
-    new AskableActorSelection(system.actorSelection("user/" + config.chargerId()))
-      .ask(req)(30.seconds)
-      .asInstanceOf[Future[RES]]
+    ActorsResolver.resolve(config.chargerId()) match {
+      case Some(actorRef) =>
+        actorRef.ask(req)(30.seconds).asInstanceOf[Future[RES]]
+      case None =>
+        throw new RuntimeException("Unable to find an actor");
+    }
   }
 
   def authorize(req: AuthorizeReq): AuthorizeRes = syncSend[AuthorizeReq, AuthorizeRes](req)

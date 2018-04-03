@@ -55,7 +55,9 @@ object ChargerApp {
     } match {
       case Success(charger) =>
         onChargerStarted(charger)
-      case Failure(_) =>
+      case Failure(e) =>
+        println(e)
+        e.printStackTrace()
         system.terminate()
     }
 
