@@ -4,12 +4,13 @@ import java.net.URI
 import javax.net.ssl.SSLContext
 
 import dispatch.Http
-import akka.actor.{ActorRef, Props}
+import akka.actor.{ActorRef, PoisonPill, Props}
 import com.thenewmotion.ocpp.soap.CentralSystemClient
 import com.thenewmotion.ocpp.Version
 
-trait OcppCharger {
+trait OcppCharger extends AutoCloseable {
   def chargerActor: ActorRef
+  override def close(): Unit
 }
 
 class OcppSoapCharger(chargerId: String,
@@ -23,8 +24,12 @@ class OcppSoapCharger(chargerId: String,
   val client = CentralSystemClient(chargerId, ocppVersion, centralSystemUri, http, Some(server.url))
   val chargerActor: ActorRef = system.actorOf(
     Props(new ChargerActor(BosService(chargerId, client, config), numConnectors, config)),
-    ActorsResolver.name(config.chargerId()))
+    ChargerActor.Resolver.name(chargerId))
   server.actor ! ChargerServer.Register(chargerId, new ChargePointService(chargerId, chargerActor))
+
+  override def close(): Unit = {
+    chargerActor ! PoisonPill
+  }
 }
 
 class OcppJsonCharger(chargerId: String,
@@ -36,5 +41,10 @@ class OcppJsonCharger(chargerId: String,
   val client = JsonCentralSystemClient(chargerId, Version.V16, centralSystemUri, authPassword, config)
   val chargerActor: ActorRef = system.actorOf(
     Props(new ChargerActor(BosService(chargerId, client, config), numConnectors, config)),
-    ActorsResolver.name(config.chargerId()))
+    ChargerActor.Resolver.name(chargerId))
+
+  override def close(): Unit = {
+    chargerActor ! PoisonPill
+    client.asInstanceOf[AutoCloseable].close()
+  }
 }

@@ -4,6 +4,7 @@ import com.typesafe.scalalogging.slf4j.LazyLogging
 import java.net.URI
 import javax.net.ssl.SSLContext
 
+import akka.actor.ActorRef
 import com.thenewmotion.ocpp.Version
 import com.thenewmotion.ocpp.messages._
 
@@ -33,9 +34,14 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
                                  authPassword: Option[String],
                                  config: ChargerConfig)
                                 (implicit sslContext: SSLContext = SSLContext.getDefault)
-  extends CentralSystemClient with LazyLogging {
+  extends CentralSystemClient with LazyLogging with AutoCloseable {
 
   def version: Version.V16.type = Version.V16
+
+  lazy val chargerActor: ActorRef = ChargerActor.Resolver.resolve(chargeBoxIdentity) match {
+    case Some(actorRef) => actorRef
+    case None => throw new RuntimeException("Unable to find an actor");
+  }
 
   val client : OcppJsonClient = new OcppJsonClient(chargeBoxIdentity, centralSystemUri, Seq(version), authPassword) {
     def onError(err: OcppError): Unit = logger.error(s"Received OCPP error $err")
@@ -118,13 +124,7 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
   def askCharger[REQ <: ChargePointReq, RES <: ChargePointRes](req: REQ)
                                                               (implicit tag: ClassTag[RES]): Future[RES] = {
     import akka.pattern.ask
-
-    ActorsResolver.resolve(config.chargerId()) match {
-      case Some(actorRef) =>
-        actorRef.ask(req)(30.seconds).asInstanceOf[Future[RES]]
-      case None =>
-        throw new RuntimeException("Unable to find an actor");
-    }
+    chargerActor.ask(req)(30.seconds).asInstanceOf[Future[RES]]
   }
 
   def authorize(req: AuthorizeReq): AuthorizeRes = syncSend[AuthorizeReq, AuthorizeRes](req)
@@ -146,4 +146,8 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
   def statusNotification(req: StatusNotificationReq): Unit = syncSend(req)
 
   def stopTransaction(req: StopTransactionReq): StopTransactionRes = syncSend(req)
+
+  override def close(): Unit = {
+    client.connection.close()
+  }
 }

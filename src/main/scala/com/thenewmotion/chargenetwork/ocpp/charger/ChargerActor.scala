@@ -8,6 +8,7 @@ import com.thenewmotion.ocpp.messages._
 
 import scala.concurrent.{Await, Future}
 import scala.language.postfixOps
+import scala.util.{Failure, Success}
 
 class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: ChargerConfig)
   extends Actor
@@ -23,6 +24,8 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
     ("AuthorizeRemoteTxRequests", (false, Some(true.toString)))
   )
 
+  var connectorActors: Vector[ActorRef] = Vector()
+
   override def preStart() {
     val interval = service.boot()
     Future {
@@ -31,7 +34,7 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
     context.system.scheduler.schedule(1 second, interval, self, Heartbeat)
     scheduleFault()
 
-    (0 until numberOfConnectors).foreach(startConnector)
+    connectorActors = (0 until numberOfConnectors).map(startConnector).toVector
   }
 
   def scheduleFault() {
@@ -131,16 +134,25 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
     case Event(Heartbeat, _) =>
       service.heartbeat()
       stay()
+
+    case Event(ConnectorExists(connector), _) =>
+      sender ! (connector >= 0 && connector < connectorActors.size)
+      stay()
+  }
+
+  onTermination {
+    case StopEvent(_, _, _) =>
+      connectorActors.foreach(c => c ! PoisonPill)
   }
 
   initialize()
 
-  def startConnector(c: Int) {
-    context.actorOf(Props(new ConnectorActor(service.connector(c))), ActorsResolver.name(config.chargerId(), c))
+  def startConnector(c: Int): ActorRef = {
+    context.actorOf(Props(new ConnectorActor(service.connector(c))), c.toString)
   }
 
   def connector(c: Int): ActorRef = {
-    ActorsResolver.resolve(config.chargerId(), c).get
+    connectorActors(c)
   }
 
   def dispatch(msg: ConnectorActor.Action, c: Int) {
@@ -160,11 +172,26 @@ object ChargerActor {
   sealed trait Action
   case object Heartbeat extends Action
   case object Fault extends Action
+  case class ConnectorExists(connector: Int) extends Action
 
   sealed trait UserAction extends Action
   case class Plug(connector: Int) extends UserAction
   case class Unplug(connector: Int) extends UserAction
   case class SwipeCard(connector: Int, card: String) extends UserAction
+
+  object Resolver {
+    def name(chargerId: String): String = "charger$" + chargerId
+
+    def resolve(chargerId: String): Option[ActorRef] =
+      findActor("charger$" + chargerId)
+
+    private def findActor(name: String): Option[ActorRef] = {
+      Await.ready(system.actorSelection("user/" + name).resolveOne(5.seconds), Duration.Inf).value.get match {
+        case Success(t) => Some(t)
+        case Failure(_) => None
+      }
+    }
+  }
 }
 
 case class LocalAuthList(version: AuthListSupported = AuthListSupported(0),

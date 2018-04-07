@@ -6,9 +6,8 @@ import org.specs2.mutable.SpecificationWithJUnit
 import org.specs2.specification.Scope
 import org.specs2.mock.Mockito
 import akka.testkit.{TestFSMRef, TestKit}
-import akka.actor.{ActorSystem, FSM}
+import akka.actor.{ActorRef, ActorSystem, FSM}
 import ChargerActor._
-import org.rogach.scallop.ScallopOption
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -78,8 +77,8 @@ class ChargerActorSpec extends SpecificationWithJUnit with Mockito {
       val card = "3E60A5E2"
 
       class TestChargerActor extends ChargerActor(service, numberOfConnectors, config) {
-        override def startConnector(c: Int) {}
-        override def connector(c: Int) = testActor
+        override def startConnector(c: Int): ActorRef = mock[ActorRef]
+        override def connector(c: Int): ActorRef = testActor
       }
     }
   }

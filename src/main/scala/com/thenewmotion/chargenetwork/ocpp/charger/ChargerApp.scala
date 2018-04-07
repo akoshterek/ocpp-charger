@@ -1,6 +1,6 @@
 package com.thenewmotion.chargenetwork.ocpp.charger
 
-import akka.actor.Props
+import akka.actor.{PoisonPill, Props}
 import com.thenewmotion.ocpp.Version
 import java.net.URI
 import java.util.Locale
@@ -20,7 +20,7 @@ object ChargerApp {
     val version = try {
       Version.withName(config.protocolVersion())
     } catch {
-      case e: NoSuchElementException => sys.error(s"Unknown protocol version ${config.protocolVersion()}")
+      case _: NoSuchElementException => sys.error(s"Unknown protocol version ${config.protocolVersion()}")
     }
 
     val connectionType: ConnectionType = config.connectionType().toLowerCase(Locale.ENGLISH) match {
@@ -56,7 +56,6 @@ object ChargerApp {
       case Success(charger) =>
         onChargerStarted(charger)
       case Failure(e) =>
-        println(e)
         e.printStackTrace()
         system.terminate()
     }
@@ -72,10 +71,14 @@ object ChargerApp {
       val bindingFuture = Http().bindAndHandle(JsonWebServer.route, "localhost", config.listenPort())
 
       println("Server online at http://localhost:%d/\nPress RETURN to stop...".format(config.listenPort()))
-      StdIn.readLine() // let it run until user presses return
+      StdIn.readLine // let it run until user presses return
+
       bindingFuture
         .flatMap(_.unbind()) // trigger unbinding from the port
-        .onComplete(_ => system.terminate()) // and shutdown when done
+        .onComplete(_ => {
+        charger.close()
+        system.terminate()
+      }) // and shutdown when done
     }
   }
 
