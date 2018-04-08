@@ -1,7 +1,5 @@
 package com.thenewmotion.chargenetwork.ocpp.charger
 
-import java.time.ZonedDateTime
-
 import com.thenewmotion.ocpp.messages.ChargePointStatus.{Available, Faulted, Occupied}
 import com.thenewmotion.ocpp.messages._
 import com.thenewmotion.ocpp.messages.meter.{DefaultValue, Meter}
@@ -94,7 +92,7 @@ class ConnectorServiceImpl(protected val service: SyncCentralSystem, connectorId
     service(StartTransactionReq(ConnectorScope(connectorId), card, ChargerClock.now, meterValue, None)).transactionId
 
   def meterValue(transactionId: Int, meterValue: Int) {
-    val meter = Meter(ZonedDateTime.now, List(DefaultValue.apply(meterValue)))
+    val meter = Meter(ChargerClock.now, List(DefaultValue.apply(meterValue)))
     service(MeterValuesReq(ConnectorScope(connectorId), Some(transactionId), List(meter)))
   }
 

@@ -6,6 +6,7 @@ import com.thenewmotion.ocpp.messages.UpdateStatusWithoutHash.VersionMismatch
 import scala.concurrent.duration._
 import com.thenewmotion.ocpp.messages._
 
+import scala.collection.immutable.TreeMap
 import scala.concurrent.{Await, Future}
 import scala.language.postfixOps
 import scala.util.{Failure, Success}
@@ -17,12 +18,13 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
   import ChargerActor._
 
   var localAuthList = LocalAuthList()
-  var chargerParameters: Map[String, (Boolean, Option[String])] = Map[String, (Boolean, Option[String])](
+  var chargerParameters: Map[String, (Boolean, Option[String])] = TreeMap[String, (Boolean, Option[String])](
     ("chargerId", (true, Some(service.chargerId))),
     ("numberOfConnectors", (true, Some(numberOfConnectors.toString))),
     ("OCPP-Simulator", (true, None)),
-    ("AuthorizeRemoteTxRequests", (false, Some(true.toString)))
-  )
+    ("AuthorizeRemoteTxRequests", (false, Some(true.toString))),
+    ("MeterValueSampleInterval", (false, Some(60.toString)))
+  )(Ordering.by(_.toLowerCase))
 
   var connectorActors: Vector[ActorRef] = Vector()
 
@@ -138,6 +140,10 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
     case Event(ConnectorExists(connector), _) =>
       sender ! (connector >= 0 && connector < connectorActors.size)
       stay()
+
+    case Event(StateRequest(c), _) =>
+      dispatch(ConnectorActor.StateRequest, c)
+      stay()
   }
 
   onTermination {
@@ -148,7 +154,7 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
   initialize()
 
   def startConnector(c: Int): ActorRef = {
-    context.actorOf(Props(new ConnectorActor(service.connector(c))), c.toString)
+    context.actorOf(Props(new ConnectorActor(service.connector(c), self)), c.toString)
   }
 
   def connector(c: Int): ActorRef = {
@@ -156,7 +162,7 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
   }
 
   def dispatch(msg: ConnectorActor.Action, c: Int) {
-    connector(c) ! msg
+    connector(c).tell(msg, sender())
   }
 }
 
@@ -178,6 +184,7 @@ object ChargerActor {
   case class Plug(connector: Int) extends UserAction
   case class Unplug(connector: Int) extends UserAction
   case class SwipeCard(connector: Int, card: String) extends UserAction
+  case class StateRequest(connector: Int) extends UserAction
 
   object Resolver {
     def name(chargerId: String): String = "charger$" + chargerId

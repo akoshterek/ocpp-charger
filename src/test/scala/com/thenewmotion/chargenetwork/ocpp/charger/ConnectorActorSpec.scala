@@ -7,7 +7,7 @@ import org.specs2.mutable.SpecificationWithJUnit
 import akka.testkit.{TestFSMRef, TestKit}
 import org.specs2.mock.Mockito
 import org.specs2.specification.Scope
-import akka.actor.ActorSystem
+import akka.actor.{ActorRef, ActorSystem}
 import ConnectorActor._
 
 import scala.concurrent.Await
@@ -22,29 +22,29 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     "become occupied when plug connected" in new ConnectorActorScope {
       actor.stateName mustEqual Available
       actor receive Plug
-      actor.stateName mustEqual Connected
+      actor.stateName mustEqual Preparing
       there was one(service).occupied()
     }
 
     "become available when plug disconnected" in new ConnectorActorScope {
-      actor.setState(stateName = Connected)
+      actor.setState(stateName = Preparing)
       actor receive Unplug
       actor.stateName mustEqual Available
       there was one(service).available()
     }
 
     "not start charging when card declined" in new ConnectorActorScope {
-      actor.setState(stateName = Connected)
+      actor.setState(stateName = Preparing)
       service.authorize(rfid) returns false
 
       actor receive SwipeCard(rfid)
 
-      actor.stateName mustEqual Connected
+      actor.stateName mustEqual Preparing
       there was one(service).authorize(rfid)
     }
 
     "start charging when card accepted" in new ConnectorActorScope {
-      actor.setState(stateName = Connected)
+      actor.setState(stateName = Preparing)
       service.authorize(rfid) returns true
       service.startSession(rfid, ConnectorActor.initialMeterValue) returns 12345
 
@@ -73,7 +73,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
       service.stopSession((===(Some(rfid))), (===(12345)), any) returns true
 
       actor receive SwipeCard(rfid)
-      actor.stateName mustEqual Connected
+      actor.stateName mustEqual Preparing
       actor.stateData mustEqual NoData
 
       there was one(service).authorize(rfid)
@@ -102,7 +102,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     extends TestKit(ActorSystem("test"))
     with Scope {
     val service = mock[ConnectorService]
-    val actor = TestFSMRef(new ConnectorActor(service))
+    val actor = TestFSMRef(new ConnectorActor(service, mock[ActorRef]))
     val rfid = "rfid"
   }
 }

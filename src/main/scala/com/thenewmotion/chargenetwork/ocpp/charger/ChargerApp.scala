@@ -68,9 +68,10 @@ object ChargerApp {
       }
 
       implicit val materializer: ActorMaterializer = ActorMaterializer()
-      val bindingFuture = Http().bindAndHandle(JsonWebServer.route, "localhost", config.listenPort())
+      val apiPort = config.listenApiPort()
+      val bindingFuture = Http().bindAndHandle(WebServer.route, "localhost", apiPort)
 
-      println("Server online at http://localhost:%d/\nPress RETURN to stop...".format(config.listenPort()))
+      println("Server online at http://localhost:%d/\nPress RETURN to stop...".format(apiPort))
       StdIn.readLine // let it run until user presses return
 
       bindingFuture
