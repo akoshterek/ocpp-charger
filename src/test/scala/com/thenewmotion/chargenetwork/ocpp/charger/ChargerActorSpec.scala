@@ -38,7 +38,7 @@ class ChargerActorSpec extends SpecificationWithJUnit with Mockito {
 
     "dispatch messages to connectors" in new ChargerActorScope {
       actor receive SwipeCard(0, card)
-      expectNoMsg()
+      expectNoMessage()
 
       actor receive Plug(0)
       actor.stateData mustEqual PluggedConnectors(Set(0))
@@ -68,7 +68,7 @@ class ChargerActorSpec extends SpecificationWithJUnit with Mockito {
       extends TestKit(ActorSystem("test"))
       with Scope {
       val numberOfConnectors = 2
-      val service = mock[BosService]
+      val service: BosService = mock[BosService]
       service.boot() returns new FiniteDuration(5, TimeUnit.SECONDS)
 
       val config = ChargerConfig(Array[String]())

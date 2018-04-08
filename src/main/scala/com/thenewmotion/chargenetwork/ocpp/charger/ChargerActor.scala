@@ -54,7 +54,11 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
       if (cs.contains(c)) dispatch(ConnectorActor.Unplug, c)
       stay() using PluggedConnectors(cs - c)
     case Event(SwipeCard(c, card), PluggedConnectors(cs)) =>
-      if (cs.contains(c)) dispatch(ConnectorActor.SwipeCard(card), c)
+      if (cs.contains(c)) {
+        connector(c) ! ConnectorActor.ConnectorSettings(11,
+          chargerParameters.getOrElse("MeterValueSampleInterval", (false, Some("20")))._2.map(s => s.toInt).getOrElse(20))
+        dispatch(ConnectorActor.SwipeCard(card), c)
+      }
       stay()
     case Event(Fault, _) =>
       service.fault()
@@ -142,7 +146,7 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
       stay()
 
     case Event(StateRequest(c), _) =>
-      dispatch(ConnectorActor.StateRequest, c)
+      forward(ConnectorActor.StateRequest, c)
       stay()
   }
 
@@ -154,7 +158,7 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
   initialize()
 
   def startConnector(c: Int): ActorRef = {
-    context.actorOf(Props(new ConnectorActor(service.connector(c), self)), c.toString)
+    context.actorOf(Props(new ConnectorActor(service.connector(c))), c.toString)
   }
 
   def connector(c: Int): ActorRef = {
@@ -162,6 +166,10 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
   }
 
   def dispatch(msg: ConnectorActor.Action, c: Int) {
+    connector(c) ! msg
+  }
+
+  def forward(msg: ConnectorActor.Action, c: Int) {
     connector(c).tell(msg, sender())
   }
 }

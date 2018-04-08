@@ -1,16 +1,9 @@
 package com.thenewmotion.chargenetwork.ocpp.charger
 
 import akka.actor._
-import akka.pattern.ask
-import akka.util
-import akka.util.Timeout
-import com.thenewmotion.ocpp.messages.{GetConfigurationReq, GetConfigurationRes, KeyValue}
-
-import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.util.{Failure, Success}
 
-class ConnectorActor(service: ConnectorService, chargerActor: ActorRef)
+class ConnectorActor(service: ConnectorService)
   extends Actor
   with LoggingFSM[ConnectorActor.State, ConnectorActor.Data] {
   import ConnectorActor._
@@ -24,10 +17,10 @@ class ConnectorActor(service: ConnectorService, chargerActor: ActorRef)
   }
 
   when(Preparing) {
-    case Event(SwipeCard(rfid), _)  =>
+    case Event(SwipeCard(rfid), cs: ConnectorSettings)  =>
       if (service.authorize(rfid)) {
         val sessionId = service.startSession(rfid, initialMeterValue)
-        goto(Charging) using ChargingData(sessionId, initialMeterValue)
+        goto(Charging) using ChargingData(sessionId, initialMeterValue, cs)
       }
       else stay()
 
@@ -37,15 +30,15 @@ class ConnectorActor(service: ConnectorService, chargerActor: ActorRef)
   }
 
   when(Charging) {
-    case Event(SwipeCard(rfid), ChargingData(transactionId, meterValue)) =>
+    case Event(SwipeCard(rfid), ChargingData(transactionId, meterValue, _)) =>
       if (service.authorize(rfid) && service.stopSession(Some(rfid), transactionId, meterValue))
         goto(Preparing) using NoData
       else stay()
 
-    case Event(SendMeterValue, ChargingData(transactionId, meterValue)) =>
+    case Event(SendMeterValue, ChargingData(transactionId, meterValue, settings)) =>
       log.debug("Sending meter value")
       service.meterValue(transactionId, meterValue)
-      stay() using ChargingData(transactionId, meterValue + 1)
+      stay() using ChargingData(transactionId, meterValue + 1, settings)
 
     case Event(StateRequest, _) =>
       sender ! stateName
@@ -56,14 +49,10 @@ class ConnectorActor(service: ConnectorService, chargerActor: ActorRef)
 
   onTransition {
     case _ -> Charging =>
-      implicit val timeout: util.Timeout = Timeout(5.seconds)
-      (chargerActor ? GetConfigurationReq(List("MeterValueSampleInterval")))
-        .mapTo[GetConfigurationRes]
-        .fallbackTo(Future.successful(GetConfigurationRes(List(KeyValue("MeterValueSampleInterval", readonly = false, Some("20"))), List())))
-        .onComplete({
-          case Success(res) => startMeterValueTimer(res.values.head.value.fold(20)(_.toInt))
-          case Failure(_) => startMeterValueTimer(20)
-        })
+      stateData match {
+        case cd: ChargingData => startMeterValueTimer(cd.settings.meterValueInterval)
+        case _ => startMeterValueTimer(ConnectorSettings().meterValueInterval)
+      }
 
     case Charging -> _ => cancelTimer("meterValueTimer")
   }
@@ -72,10 +61,13 @@ class ConnectorActor(service: ConnectorService, chargerActor: ActorRef)
     case Event(StateRequest, _) =>
       sender ! stateName
       stay()
+
+    case Event(cs: ConnectorSettings, _) =>
+      stay() using cs
   }
 
   onTermination {
-    case StopEvent(_, Charging, ChargingData(transactionId, meterValue)) =>
+    case StopEvent(_, Charging, ChargingData(transactionId, meterValue, _)) =>
       service.stopSession(None, transactionId, meterValue)
       println(getLog.mkString("\n\t"))
   }
@@ -107,7 +99,8 @@ object ConnectorActor {
 
   sealed abstract class Data
   case object NoData extends Data
-  case class ChargingData(transactionId: Int, meterValue: Int) extends Data
+  case class ConnectorSettings(power: Double = 3.7, meterValueInterval: Int = 20) extends Data
+  case class ChargingData(transactionId: Int, meterValue: Int, settings: ConnectorSettings) extends Data
 
   case object SendMeterValue
 }

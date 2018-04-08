@@ -7,7 +7,7 @@ import org.specs2.mutable.SpecificationWithJUnit
 import akka.testkit.{TestFSMRef, TestKit}
 import org.specs2.mock.Mockito
 import org.specs2.specification.Scope
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.ActorSystem
 import ConnectorActor._
 
 import scala.concurrent.Await
@@ -51,14 +51,14 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
       actor receive SwipeCard(rfid)
 
       actor.stateName mustEqual Charging
-      actor.stateData mustEqual ChargingData(12345, ConnectorActor.initialMeterValue)
+      actor.stateData mustEqual ChargingData(12345, ConnectorActor.initialMeterValue, ConnectorSettings())
 
       there was one(service).authorize(rfid)
       there was one(service).startSession(rfid, ConnectorActor.initialMeterValue)
     }
 
     "continue charging when card declined" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue))
+      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue, null))
       service.authorize(rfid) returns false
 
       actor receive SwipeCard(rfid)
@@ -68,7 +68,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     }
 
     "stop charging when card accepted" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue))
+      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue, ConnectorSettings()))
       service.authorize(rfid) returns true
       service.stopSession((===(Some(rfid))), (===(12345)), any) returns true
 
@@ -81,7 +81,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     }
 
     "not stop charging when card declined" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue))
+      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue, ConnectorSettings()))
       service.authorize(rfid) returns false
 
       actor receive SwipeCard(rfid)
@@ -91,7 +91,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     }
 
     "stop charging on termination" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue))
+      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue, ConnectorSettings()))
       Await.ready(system.terminate(), new FiniteDuration(5, TimeUnit.SECONDS))
 
       there was one(service).stopSession(None, 12345, ConnectorActor.initialMeterValue)
@@ -102,7 +102,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     extends TestKit(ActorSystem("test"))
     with Scope {
     val service = mock[ConnectorService]
-    val actor = TestFSMRef(new ConnectorActor(service, mock[ActorRef]))
+    val actor = TestFSMRef(new ConnectorActor(service))
     val rfid = "rfid"
   }
 }
