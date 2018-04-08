@@ -1,6 +1,7 @@
 package com.thenewmotion.chargenetwork.ocpp.charger
 
 import akka.actor._
+import akka.util.Timeout
 import com.thenewmotion.ocpp.messages.UpdateStatusWithoutHash.VersionMismatch
 
 import scala.concurrent.duration._
@@ -145,8 +146,23 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
       sender ! (connector >= 0 && connector < connectorActors.size)
       stay()
 
-    case Event(StateRequest(c), _) =>
-      forward(ConnectorActor.StateRequest, c)
+    case Event(StateRequest(c, sendNotification), _) =>
+      if (c != 0) {
+        forward(ConnectorActor.StateRequest(sendNotification), c)
+      } else {
+        import akka.pattern.ask
+        import akka.pattern.pipe
+
+        val future = Future.sequence(
+          connectorActors.map(c => {
+            c.ask(ConnectorActor.StateRequest(sendNotification))(Timeout(30.seconds))
+              .mapTo[ConnectorActor.State]
+              .fallbackTo(Future.successful(ConnectorActor.Faulted))
+          })
+        )
+
+        future.pipeTo(sender)
+      }
       stay()
   }
 
@@ -170,7 +186,7 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
   }
 
   def forward(msg: ConnectorActor.Action, c: Int) {
-    connector(c).tell(msg, sender())
+    connector(c).forward(msg)
   }
 }
 
@@ -192,7 +208,7 @@ object ChargerActor {
   case class Plug(connector: Int) extends UserAction
   case class Unplug(connector: Int) extends UserAction
   case class SwipeCard(connector: Int, card: String) extends UserAction
-  case class StateRequest(connector: Int) extends UserAction
+  case class StateRequest(connector: Int, sendNotification: Boolean = false) extends UserAction
 
   object Resolver {
     def name(chargerId: String): String = "charger$" + chargerId

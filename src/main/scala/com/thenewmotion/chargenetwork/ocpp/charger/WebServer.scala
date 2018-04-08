@@ -40,6 +40,12 @@ object WebServer {
       } else {
         complete(StatusCodes.NotFound, s"Connector $chargerId:$connectorId not found")
       }
+    } ~ path("showconnectors") {
+      post {
+        val result = ask(chargerActor, StateRequest(0, sendNotification = true), Seq[ConnectorActor.State]())
+          .map(s => ConnectorStatus(s.toString))
+        complete(result)
+      }
     }
   }
 

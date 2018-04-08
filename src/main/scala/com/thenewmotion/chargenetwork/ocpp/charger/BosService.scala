@@ -24,6 +24,7 @@ trait ConnectorService {
   def charging()
   def available()
   def finishing()
+  def faulted()
   def authorize(card: String): Boolean
   def startSession(card: String, meterValue: Int): Int
   def meterValue(transactionId: Int, meterValue: Int)
@@ -90,6 +91,10 @@ class ConnectorServiceImpl(protected val service: SyncCentralSystem, connectorId
 
   def finishing() {
     notification(Occupied(Some(OccupancyKind.Finishing), Some("Finishing")), Some(connectorId))
+  }
+
+  def faulted(): Unit = {
+    notification(Faulted(Some(ChargePointErrorCode.InternalError), Some("InternalError"), None))
   }
 
   def available() {

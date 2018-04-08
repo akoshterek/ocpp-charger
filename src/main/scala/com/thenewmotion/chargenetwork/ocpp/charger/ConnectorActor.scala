@@ -43,8 +43,8 @@ class ConnectorActor(service: ConnectorService)
       service.meterValue(transactionId, meterValue)
       stay() using ChargingData(transactionId, meterValue + 1, settings)
 
-    case Event(StateRequest, _) =>
-      sender ! stateName
+    case Event(StateRequest(sendNotification), _) =>
+      sender ! getState(sendNotification)
       stay()
 
     case Event(_: Action, _) => stay()
@@ -67,8 +67,8 @@ class ConnectorActor(service: ConnectorService)
   }
 
   whenUnhandled {
-    case Event(StateRequest, _) =>
-      sender ! stateName
+    case Event(StateRequest(sendNotification), _) =>
+      sender ! getState(sendNotification)
       stay()
 
     case Event(cs: ConnectorSettings, _) =>
@@ -85,6 +85,19 @@ class ConnectorActor(service: ConnectorService)
     log.debug(s"Setting timer for meterValue (every $period seconds)")
     setTimer("meterValueTimer", SendMeterValue, period.seconds, repeat = true)
   }
+
+  private def getState(sendNotification: Boolean): ConnectorActor.State = {
+    if (sendNotification) {
+      stateName match {
+        case Available => service.available()
+        case Preparing => service.preparing()
+        case Charging => service.charging()
+        case Finishing => service.finishing()
+        case Faulted => service.faulted()
+      }
+    }
+    stateName
+  }
 }
 
 object ConnectorActor {
@@ -95,15 +108,15 @@ object ConnectorActor {
   case object Preparing extends State
   case object Charging extends State
   case object Finishing extends State
-  case object Reserved extends State
-  case object Unavailable extends State
+  //case object Reserved extends State
+  //case object Unavailable extends State
   case object Faulted extends State
 
   sealed trait Action
   case object Plug extends Action
   case object Unplug extends Action
   case class SwipeCard(rfid: String) extends Action
-  case object StateRequest extends Action
+  case class StateRequest(sendNotification: Boolean) extends Action
   case object Fault
 
   sealed abstract class Data
