@@ -20,8 +20,10 @@ trait BosService {
 }
 
 trait ConnectorService {
-  def occupied()
+  def preparing()
+  def charging()
   def available()
+  def finishing()
   def authorize(card: String): Boolean
   def startSession(card: String, meterValue: Int): Int
   def meterValue(transactionId: Int, meterValue: Int)
@@ -78,8 +80,16 @@ class ConnectorServiceImpl(protected val service: SyncCentralSystem, connectorId
 
   private val random = new Random()
 
-  def occupied() {
+  def preparing() {
+    notification(Occupied(Some(OccupancyKind.Preparing), Some("Preparing")), Some(connectorId))
+  }
+
+  def charging() {
     notification(Occupied(Some(OccupancyKind.Charging), Some("Charging")), Some(connectorId))
+  }
+
+  def finishing() {
+    notification(Occupied(Some(OccupancyKind.Finishing), Some("Finishing")), Some(connectorId))
   }
 
   def available() {

@@ -12,7 +12,7 @@ class ConnectorActor(service: ConnectorService)
 
   when(Available) {
     case Event(Plug, _) =>
-      service.occupied()
+      service.preparing()
       goto(Preparing)
   }
 
@@ -20,6 +20,7 @@ class ConnectorActor(service: ConnectorService)
     case Event(SwipeCard(rfid), cs: ConnectorSettings)  =>
       if (service.authorize(rfid)) {
         val sessionId = service.startSession(rfid, initialMeterValue)
+        service.charging()
         goto(Charging) using ChargingData(sessionId, initialMeterValue, cs)
       }
       else stay()
@@ -31,8 +32,10 @@ class ConnectorActor(service: ConnectorService)
 
   when(Charging) {
     case Event(SwipeCard(rfid), ChargingData(transactionId, meterValue, _)) =>
-      if (service.authorize(rfid) && service.stopSession(Some(rfid), transactionId, meterValue))
-        goto(Preparing) using NoData
+      if (service.authorize(rfid) && service.stopSession(Some(rfid), transactionId, meterValue)) {
+        service.finishing()
+        goto(Finishing) using NoData
+      }
       else stay()
 
     case Event(SendMeterValue, ChargingData(transactionId, meterValue, settings)) =>
@@ -45,6 +48,12 @@ class ConnectorActor(service: ConnectorService)
       stay()
 
     case Event(_: Action, _) => stay()
+  }
+
+  when(Finishing) {
+    case Event(Unplug, _) =>
+      service.available()
+      goto(Available)
   }
 
   onTransition {

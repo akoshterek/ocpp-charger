@@ -23,7 +23,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
       actor.stateName mustEqual Available
       actor receive Plug
       actor.stateName mustEqual Preparing
-      there was one(service).occupied()
+      there was one(service).preparing()
     }
 
     "become available when plug disconnected" in new ConnectorActorScope {
