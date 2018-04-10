@@ -11,8 +11,9 @@ import scala.concurrent.duration._
 import akka.pattern.{AskableActorRef, ask}
 import com.thenewmotion.chargenetwork.ocpp.charger.ChargerActor.StateRequest
 
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Await
 import scala.reflect.ClassTag
+import scala.util.{Failure, Success}
 
 object WebServer {
   implicit val timeout: Timeout = Timeout(60.seconds)
@@ -30,7 +31,13 @@ object WebServer {
   }
 
   private def ask[Q, R: ClassTag](chargerActor: AskableActorRef, request: Q, fallback: R): R = {
-    Await.result(chargerActor.ask(request).mapTo[R].fallbackTo(Future.successful(fallback)), timeout.duration)
+    val future = chargerActor.ask(request).mapTo[R]
+    Await.ready(future, timeout.duration)
+    future.value match {
+      case None => fallback
+      case Some(Failure(e)) => throw e
+      case Some(Success(result)) => result
+    }
   }
 
   private def chargerActions(chargerId: String, chargerActor: ActorRef): Route = {
@@ -42,8 +49,11 @@ object WebServer {
       }
     } ~ path("showconnectors") {
       post {
-        val result = ask(chargerActor, StateRequest(0, sendNotification = true), Seq[ConnectorActor.State]())
-          .map(s => ConnectorStatus(s.toString))
+        val result = ask(chargerActor, StateRequest(-1, sendNotification = true), Seq[ConnectorActor.State]())
+          .map(_.toString)
+          .zipWithIndex
+          .map({case (v, k) => k + 1 -> v})
+          .toMap
         complete(result)
       }
     }
@@ -78,7 +88,7 @@ object WebServer {
 
   private def completeWithConnectorState(chargerActor: AskableActorRef, connectorId: Int): Route = {
     val result = ask[StateRequest, ConnectorActor.State](chargerActor, StateRequest(connectorId), ConnectorActor.Faulted)
-    complete(ConnectorStatus(result.toString))
+    complete(Map(connectorId + 1 -> result.toString))
   }
 }
 

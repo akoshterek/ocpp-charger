@@ -147,7 +147,7 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
       stay()
 
     case Event(StateRequest(c, sendNotification), _) =>
-      if (c != 0) {
+      if (c >= 0) {
         forward(ConnectorActor.StateRequest(sendNotification), c)
       } else {
         import akka.pattern.ask

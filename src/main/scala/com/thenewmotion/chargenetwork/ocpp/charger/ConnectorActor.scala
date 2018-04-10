@@ -8,6 +8,9 @@ class ConnectorActor(service: ConnectorService)
   with LoggingFSM[ConnectorActor.State, ConnectorActor.Data] {
   import ConnectorActor._
 
+  var power = 3.7
+  var sendMeterValuesPeriod = 20
+
   startWith(Available, NoData)
 
   when(Available) {
@@ -17,13 +20,8 @@ class ConnectorActor(service: ConnectorService)
   }
 
   when(Preparing) {
-    case Event(SwipeCard(rfid), cs: ConnectorSettings)  =>
-      if (service.authorize(rfid)) {
-        val sessionId = service.startSession(rfid, initialMeterValue)
-        service.charging()
-        goto(Charging) using ChargingData(sessionId, initialMeterValue, cs)
-      }
-      else stay()
+    case Event(SwipeCard(rfid), _)  =>
+      swipeCardStartTransaction(rfid)
 
     case Event(Unplug, _) =>
       service.available()
@@ -31,17 +29,17 @@ class ConnectorActor(service: ConnectorService)
   }
 
   when(Charging) {
-    case Event(SwipeCard(rfid), ChargingData(transactionId, meterValue, _)) =>
+    case Event(SwipeCard(rfid), ChargingData(transactionId, meterValue)) =>
       if (service.authorize(rfid) && service.stopSession(Some(rfid), transactionId, meterValue)) {
         service.finishing()
         goto(Finishing) using NoData
       }
       else stay()
 
-    case Event(SendMeterValue, ChargingData(transactionId, meterValue, settings)) =>
+    case Event(SendMeterValue, ChargingData(transactionId, meterValue)) =>
       log.debug("Sending meter value")
       service.meterValue(transactionId, meterValue)
-      stay() using ChargingData(transactionId, meterValue + 1, settings)
+      stay() using ChargingData(transactionId, meterValue + 1)
 
     case Event(StateRequest(sendNotification), _) =>
       sender ! getState(sendNotification)
@@ -51,18 +49,16 @@ class ConnectorActor(service: ConnectorService)
   }
 
   when(Finishing) {
+    case Event(SwipeCard(rfid), _)  =>
+      swipeCardStartTransaction(rfid)
+
     case Event(Unplug, _) =>
       service.available()
       goto(Available)
   }
 
   onTransition {
-    case _ -> Charging =>
-      stateData match {
-        case cd: ChargingData => startMeterValueTimer(cd.settings.meterValueInterval)
-        case _ => startMeterValueTimer(ConnectorSettings().meterValueInterval)
-      }
-
+    case _ -> Charging => startMeterValueTimer(sendMeterValuesPeriod)
     case Charging -> _ => cancelTimer("meterValueTimer")
   }
 
@@ -71,12 +67,17 @@ class ConnectorActor(service: ConnectorService)
       sender ! getState(sendNotification)
       stay()
 
+    case Event(SwipeCard(rfid), state: Any) =>
+      stay()
+
     case Event(cs: ConnectorSettings, _) =>
-      stay() using cs
+      power = cs.power
+      sendMeterValuesPeriod = cs.sendMeterValuesPeriod
+      stay()
   }
 
   onTermination {
-    case StopEvent(_, Charging, ChargingData(transactionId, meterValue, _)) =>
+    case StopEvent(_, Charging, ChargingData(transactionId, meterValue)) =>
       service.stopSession(None, transactionId, meterValue)
       println(getLog.mkString("\n\t"))
   }
@@ -97,6 +98,15 @@ class ConnectorActor(service: ConnectorService)
       }
     }
     stateName
+  }
+
+  private def swipeCardStartTransaction(rfid: String): State = {
+    if (service.authorize(rfid)) {
+      val sessionId = service.startSession(rfid, initialMeterValue)
+      service.charging()
+      goto(Charging) using ChargingData(sessionId, initialMeterValue)
+    }
+    else stay()
   }
 }
 
@@ -121,8 +131,8 @@ object ConnectorActor {
 
   sealed abstract class Data
   case object NoData extends Data
-  case class ConnectorSettings(power: Double = 3.7, meterValueInterval: Int = 20) extends Data
-  case class ChargingData(transactionId: Int, meterValue: Int, settings: ConnectorSettings) extends Data
+  case class ConnectorSettings(power: Double = 3.7, sendMeterValuesPeriod: Int = 20) extends Data
+  case class ChargingData(transactionId: Int, meterValue: Int) extends Data
 
   case object SendMeterValue
 }

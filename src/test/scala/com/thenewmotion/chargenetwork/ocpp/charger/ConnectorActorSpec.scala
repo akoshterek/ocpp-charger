@@ -51,14 +51,14 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
       actor receive SwipeCard(rfid)
 
       actor.stateName mustEqual Charging
-      actor.stateData mustEqual ChargingData(12345, ConnectorActor.initialMeterValue, ConnectorSettings())
+      actor.stateData mustEqual ChargingData(12345, ConnectorActor.initialMeterValue)
 
       there was one(service).authorize(rfid)
       there was one(service).startSession(rfid, ConnectorActor.initialMeterValue)
     }
 
     "continue charging when card declined" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue, null))
+      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue))
       service.authorize(rfid) returns false
 
       actor receive SwipeCard(rfid)
@@ -68,7 +68,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     }
 
     "stop charging when card accepted" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue, ConnectorSettings()))
+      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue))
       service.authorize(rfid) returns true
       service.stopSession((===(Some(rfid))), (===(12345)), any) returns true
 
@@ -81,7 +81,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     }
 
     "not stop charging when card declined" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue, ConnectorSettings()))
+      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue))
       service.authorize(rfid) returns false
 
       actor receive SwipeCard(rfid)
@@ -91,7 +91,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     }
 
     "stop charging on termination" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue, ConnectorSettings()))
+      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue))
       Await.ready(system.terminate(), new FiniteDuration(5, TimeUnit.SECONDS))
 
       there was one(service).stopSession(None, 12345, ConnectorActor.initialMeterValue)
