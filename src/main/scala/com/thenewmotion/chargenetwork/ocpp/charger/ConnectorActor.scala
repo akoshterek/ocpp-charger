@@ -1,6 +1,7 @@
 package com.thenewmotion.chargenetwork.ocpp.charger
 
 import akka.actor._
+
 import scala.concurrent.duration._
 
 class ConnectorActor(service: ConnectorService)
@@ -67,7 +68,7 @@ class ConnectorActor(service: ConnectorService)
       sender ! getState(sendNotification)
       stay()
 
-    case Event(SwipeCard(rfid), state: Any) =>
+    case Event(SwipeCard(_), _) =>
       stay()
 
     case Event(cs: ConnectorSettings, _) =>
@@ -101,10 +102,17 @@ class ConnectorActor(service: ConnectorService)
   }
 
   private def swipeCardStartTransaction(rfid: String): State = {
+    import com.thenewmotion.ocpp.messages.AuthorizationStatus.Accepted
+
     if (service.authorize(rfid)) {
-      val sessionId = service.startSession(rfid, initialMeterValue)
-      service.charging()
-      goto(Charging) using ChargingData(sessionId, initialMeterValue)
+      service.startSession(rfid, initialMeterValue) match {
+        case (sessionId, Accepted) =>
+          service.charging()
+          goto(Charging) using ChargingData(sessionId, initialMeterValue)
+        case (_, _) =>
+          stay()
+      }
+
     }
     else stay()
   }

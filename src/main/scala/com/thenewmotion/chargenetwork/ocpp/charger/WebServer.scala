@@ -49,12 +49,9 @@ object WebServer {
       }
     } ~ path("showconnectors") {
       post {
-        val result = ask(chargerActor, StateRequest(-1, sendNotification = true), Seq[ConnectorActor.State]())
-          .map(_.toString)
-          .zipWithIndex
-          .map({case (v, k) => k + 1 -> v})
-          .toMap
-        complete(result)
+        showConnectors(chargerActor, sendNotification = true)
+      } ~ get {
+        showConnectors(chargerActor, sendNotification = false)
       }
     }
   }
@@ -89,6 +86,15 @@ object WebServer {
   private def completeWithConnectorState(chargerActor: AskableActorRef, connectorId: Int): Route = {
     val result = ask[StateRequest, ConnectorActor.State](chargerActor, StateRequest(connectorId), ConnectorActor.Faulted)
     complete(Map(connectorId + 1 -> result.toString))
+  }
+
+  private def showConnectors(chargerActor: ActorRef, sendNotification: Boolean): Route = {
+    val result = ask(chargerActor, StateRequest(-1, sendNotification), Seq[ConnectorActor.State]())
+      .map(_.toString)
+      .zipWithIndex
+      .map({case (v, k) => k + 1 -> v})
+      .toMap
+    complete(result)
   }
 }
 

@@ -66,7 +66,7 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
         notSupported("Get Diagnostics")
 
       def changeConfiguration(req: ChangeConfigurationReq): Future[ChangeConfigurationRes] =
-        notSupported("Change Configuration")
+        askCharger(req)
 
       def changeAvailability(req: ChangeAvailabilityReq): Future[ChangeAvailabilityRes] =
         Future.successful(ChangeAvailabilityRes(AvailabilityStatus.Rejected))
@@ -77,7 +77,7 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
         Future.successful(ResetRes(false))
 
       def updateFirmware(req: UpdateFirmwareReq): Future[Unit] =
-        notSupported("Update Firmware")
+        Future.successful(())
 
       def sendLocalList(req: SendLocalListReq): Future[SendLocalListRes] =
         askCharger(req)
@@ -111,7 +111,6 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
           s"OCPP Charger Simulator doesn't support $opName"
         ))
     }
-
   }
 
   def syncSend[REQ <: CentralSystemReq, RES <: CentralSystemRes](req: REQ)

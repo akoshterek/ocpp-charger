@@ -9,6 +9,7 @@ import org.specs2.mock.Mockito
 import org.specs2.specification.Scope
 import akka.actor.ActorSystem
 import ConnectorActor._
+import com.thenewmotion.ocpp.messages.AuthorizationStatus._
 
 import scala.concurrent.Await
 import scala.concurrent.duration.FiniteDuration
@@ -43,10 +44,21 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
       there was one(service).authorize(rfid)
     }
 
+    "not start charging when card is accepted but concurrent transaction is going on" in new ConnectorActorScope {
+      actor.setState(stateName = Preparing)
+      service.authorize(rfid) returns true
+      service.startSession(rfid, ConnectorActor.initialMeterValue) returns ((12345, ConcurrentTx))
+
+      actor receive SwipeCard(rfid)
+
+      actor.stateName mustEqual Preparing
+      there was one(service).authorize(rfid)
+    }
+
     "start charging when card accepted" in new ConnectorActorScope {
       actor.setState(stateName = Preparing)
       service.authorize(rfid) returns true
-      service.startSession(rfid, ConnectorActor.initialMeterValue) returns 12345
+      service.startSession(rfid, ConnectorActor.initialMeterValue) returns ((12345, Accepted))
 
       actor receive SwipeCard(rfid)
 
@@ -70,14 +82,14 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     "stop charging when card accepted" in new ConnectorActorScope {
       actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue))
       service.authorize(rfid) returns true
-      service.stopSession((===(Some(rfid))), (===(12345)), any) returns true
+      service.stopSession(card = ===(Some(rfid)), transactionId = ===(12345), meterValue = any) returns true
 
       actor receive SwipeCard(rfid)
       actor.stateName mustEqual Preparing
       actor.stateData mustEqual NoData
 
       there was one(service).authorize(rfid)
-      there was one(service).stopSession((===(Some(rfid))), (===(12345)), any)
+      there was one(service).stopSession(===(Some(rfid)), ===(12345), any)
     }
 
     "not stop charging when card declined" in new ConnectorActorScope {
@@ -101,7 +113,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
   class ConnectorActorScope
     extends TestKit(ActorSystem("test"))
     with Scope {
-    val service = mock[ConnectorService]
+    val service: ConnectorService = mock[ConnectorService]
     val actor = TestFSMRef(new ConnectorActor(service))
     val rfid = "rfid"
   }

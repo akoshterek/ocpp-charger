@@ -26,7 +26,7 @@ trait ConnectorService {
   def finishing()
   def faulted()
   def authorize(card: String): Boolean
-  def startSession(card: String, meterValue: Int): Int
+  def startSession(card: String, meterValue: Int): (Int, AuthorizationStatus)
   def meterValue(transactionId: Int, meterValue: Int)
   def stopSession(card: Option[String], transactionId: Int, meterValue: Int): Boolean
 }
@@ -103,8 +103,10 @@ class ConnectorServiceImpl(protected val service: SyncCentralSystem, connectorId
 
   def authorize(card: String): Boolean = service(AuthorizeReq(card)).idTag.status == AuthorizationStatus.Accepted
 
-  def startSession(card: String, meterValue: Int): Int =
-    service(StartTransactionReq(ConnectorScope(connectorId), card, ChargerClock.now, meterValue, None)).transactionId
+  def startSession(card: String, meterValue: Int): (Int, AuthorizationStatus) = {
+    val res = service(StartTransactionReq(ConnectorScope(connectorId), card, ChargerClock.now, meterValue, None))
+    (res.transactionId, res.idTag.status)
+  }
 
   def meterValue(transactionId: Int, meterValue: Int) {
     val meter = Meter(ChargerClock.now, List(DefaultValue.apply(meterValue)))
