@@ -168,11 +168,6 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
       stay()
   }
 
-  onTermination {
-    case StopEvent(_, _, _) =>
-      connectorActors.foreach(c => c ! PoisonPill)
-  }
-
   initialize()
 
   def startConnector(c: Int): ActorRef = {

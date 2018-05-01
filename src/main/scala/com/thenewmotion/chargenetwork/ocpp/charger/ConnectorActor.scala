@@ -129,10 +129,12 @@ class ConnectorActor(service: ConnectorService)
           stay()
       }
     }
-    else stay()
+    else {
+      stay()
+    }
   }
 
-  private def readMeter: Int = Await.result(readMeterAsync, 5.seconds)
+  private def readMeter: Int = Await.result(readMeterAsync, 505.seconds)
 
   private def readMeterAsync: Future[Int] = {
     meterActor.ask(MeterActor.Read)(Timeout(5.seconds))

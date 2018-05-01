@@ -47,7 +47,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     "not start charging when card is accepted but concurrent transaction is going on" in new ConnectorActorScope {
       actor.setState(stateName = Preparing)
       service.authorize(rfid) returns true
-      service.startSession(rfid, MeterActor.initialTicks) returns ((12345, ConcurrentTx))
+      service.startSession(rfid, MeterActor.initialTicks * 10) returns ((12345, ConcurrentTx))
 
       actor receive SwipeCard(rfid)
 
@@ -58,7 +58,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     "start charging when card accepted" in new ConnectorActorScope {
       actor.setState(stateName = Preparing)
       service.authorize(rfid) returns true
-      service.startSession(rfid, MeterActor.initialTicks) returns ((12345, Accepted))
+      service.startSession(rfid, MeterActor.initialTicks * 10) returns ((12345, Accepted))
 
       actor receive SwipeCard(rfid)
 
@@ -66,7 +66,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
       actor.stateData mustEqual ChargingData(12345)
 
       there was one(service).authorize(rfid)
-      there was one(service).startSession(rfid, MeterActor.initialTicks)
+      there was one(service).startSession(rfid, MeterActor.initialTicks * 10)
     }
 
     "continue charging when card declined" in new ConnectorActorScope {
@@ -85,7 +85,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
       service.stopSession(card = ===(Some(rfid)), transactionId = ===(12345), meterValue = any) returns true
 
       actor receive SwipeCard(rfid)
-      actor.stateName mustEqual Preparing
+      actor.stateName mustEqual Finishing
       actor.stateData mustEqual NoData
 
       there was one(service).authorize(rfid)
@@ -106,7 +106,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
       actor.setState(stateName = Charging, stateData = ChargingData(12345))
       Await.ready(system.terminate(), new FiniteDuration(5, TimeUnit.SECONDS))
 
-      there was one(service).stopSession(None, 12345, MeterActor.initialTicks * 10)
+      there was one(service).stopSession(===(None), ===(12345), anyInt)
     }
   }
 

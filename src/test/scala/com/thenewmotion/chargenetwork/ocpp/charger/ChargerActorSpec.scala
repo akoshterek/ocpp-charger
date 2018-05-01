@@ -45,6 +45,7 @@ class ChargerActorSpec extends SpecificationWithJUnit with Mockito {
       expectMsg(ConnectorActor.Plug)
 
       actor receive SwipeCard(0, card)
+      expectMsg(ConnectorActor.ConnectorSettings(11.0, 60))
       expectMsg(ConnectorActor.SwipeCard(card))
 
       actor receive Plug(1)
@@ -52,6 +53,7 @@ class ChargerActorSpec extends SpecificationWithJUnit with Mockito {
       expectMsg(ConnectorActor.Plug)
 
       actor receive SwipeCard(1, card)
+      expectMsg(ConnectorActor.ConnectorSettings(11.0, 60))
       expectMsg(ConnectorActor.SwipeCard(card))
 
       actor receive Unplug(0)
