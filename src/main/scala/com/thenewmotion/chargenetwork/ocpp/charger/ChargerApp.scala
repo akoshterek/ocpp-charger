@@ -1,16 +1,20 @@
 package com.thenewmotion.chargenetwork.ocpp.charger
 
-import akka.actor.{PoisonPill, Props}
+import akka.actor.Props
 import com.thenewmotion.ocpp.Version
 import java.net.URI
 import java.util.Locale
 
 import akka.http.scaladsl.Http
+import akka.http.scaladsl.server.RouteConcatenation._
 import akka.stream.ActorMaterializer
+import ch.megard.akka.http.cors.scaladsl.CorsDirectives
 import javax.net.ssl.SSLContext
 
 import scala.io.StdIn
 import scala.util.{Failure, Success, Try}
+
+//import ch.megard.akka.http.cors.scaladsl._
 
 object ChargerApp {
 
@@ -69,7 +73,8 @@ object ChargerApp {
 
       implicit val materializer: ActorMaterializer = ActorMaterializer()
       val apiPort = config.listenApiPort()
-      val bindingFuture = Http().bindAndHandle(WebServer.route, "localhost", apiPort)
+      val routes = CorsDirectives.cors() ((new Rest).route ~ SwaggerDocService.routes)
+      val bindingFuture = Http().bindAndHandle(routes, "localhost", apiPort)
 
       println("Server online at http://localhost:%d/\nPress RETURN to stop...".format(apiPort))
       StdIn.readLine // let it run until user presses return

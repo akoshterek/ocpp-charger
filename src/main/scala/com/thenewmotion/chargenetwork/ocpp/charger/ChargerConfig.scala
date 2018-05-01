@@ -17,16 +17,17 @@ class ChargerConfig(args: Seq[String]) extends ScallopConf(args) {
   val imsi = opt[String]("imsi", descr = "Charge point SIM card IMSI", default = None)
   val meterType = opt[String]("meter-type", descr = "Charge point main meter type", default = Some("Dummy Meter"))
   val meterSerial = opt[String]("meter-serial", descr = "Charge point main meter serial number", default = Some("DUMMY-000001"))
+  val connectorPower = opt[Double]("connector-power", descr = "KWh per connector [3.7 - 22]", default = Some(11))
 
   val passId = opt[String]("pass-id", descr = "RFID of pass to try to start sessions with", default = Some("3E60A5E2"))
   val protocolVersion = opt[String]("protocol-version", descr = "OCPP version (either \"1.2\" or \"1.5\"", default = Some("1.6"))
   val connectionType = opt[String]("connection-type", descr = "whether to use WebSocket/JSON or HTTP/SOAP (either  \"json\" or \"soap\")", default = Some("json"))
   val listenPort = opt[Int]("listen", descr = "TCP port to listen on for remote commands (SOAP)", default = Some(8084.toShort))
-  val listenApiPort = opt[Int]("listen-api", descr = "TCP port to listen on for REST API", default = Some(8090.toShort))
+  val listenApiPort = opt[Int]("listen-api", descr = "TCP port to listen on for REST API", default = Some(8184.toShort))
 
 
-  val simulateUser = toggle("user-simulation", descrYes = "Simulate user activity", descrNo = "Don't simulate user activity",  default = Some(true))
-  val simulateFailure = toggle("failure-simulation", descrYes = "Simulate charger failure", descrNo = "Don't simulate charger failure",  default = Some(true))
+  val simulateUser = toggle("user-simulation", descrYes = "Simulate user activity", descrNo = "Don't simulate user activity",  default = Some(false))
+  val simulateFailure = toggle("failure-simulation", descrYes = "Simulate charger failure", descrNo = "Don't simulate charger failure",  default = Some(false))
 
   val authPassword = opt[String]("auth-password", descr = "set basic auth password", default = None)
   val keystoreFile = opt[String]("keystore-file", descr = "keystore file for ssl", default = None)
@@ -39,6 +40,12 @@ class ChargerConfig(args: Seq[String]) extends ScallopConf(args) {
 
   validate (listenApiPort) {
     p => validatePort(p)
+  }
+
+  validate (connectorPower) {
+    p =>
+      if (p >= 3.7 && p <= 22) Right(Unit)
+      else Left("Invalid connector power: " + p)
   }
 
   private def validatePort(p: Int): Either[String, Unit] =

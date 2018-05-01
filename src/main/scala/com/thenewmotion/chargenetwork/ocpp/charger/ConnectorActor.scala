@@ -1,7 +1,10 @@
 package com.thenewmotion.chargenetwork.ocpp.charger
 
 import akka.actor._
+import akka.pattern.ask
+import akka.util.Timeout
 
+import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 
 class ConnectorActor(service: ConnectorService)
@@ -11,6 +14,7 @@ class ConnectorActor(service: ConnectorService)
 
   var power = 3.7
   var sendMeterValuesPeriod = 20
+  lazy val meterActor: ActorRef = context.actorOf(Props(new MeterActor()), "meter")
 
   startWith(Available, NoData)
 
@@ -30,20 +34,22 @@ class ConnectorActor(service: ConnectorService)
   }
 
   when(Charging) {
-    case Event(SwipeCard(rfid), ChargingData(transactionId, meterValue)) =>
-      if (service.authorize(rfid) && service.stopSession(Some(rfid), transactionId, meterValue)) {
+    case Event(SwipeCard(rfid), ChargingData(transactionId)) =>
+      if (service.authorize(rfid) && service.stopSession(Some(rfid), transactionId, readMeter)) {
         service.finishing()
         goto(Finishing) using NoData
       }
       else stay()
 
-    case Event(SendMeterValue, ChargingData(transactionId, meterValue)) =>
+    case Event(SendMeterValue, ChargingData(transactionId)) =>
       log.debug("Sending meter value")
-      service.meterValue(transactionId, meterValue)
-      stay() using ChargingData(transactionId, meterValue + 1)
+      service.meterValue(transactionId, readMeter)
+      stay()
 
-    case Event(StateRequest(sendNotification), _) =>
-      sender ! getState(sendNotification)
+    case Event(MeterValue(true), ChargingData(transactionId)) =>
+      val meterValue = readMeter
+      service.meterValue(transactionId, meterValue)
+      sender ! meterValue
       stay()
 
     case Event(_: Action, _) => stay()
@@ -59,13 +65,23 @@ class ConnectorActor(service: ConnectorService)
   }
 
   onTransition {
-    case _ -> Charging => startMeterValueTimer(sendMeterValuesPeriod)
-    case Charging -> _ => cancelTimer("meterValueTimer")
+    case _ -> Charging =>
+      startMeterValueTimer(sendMeterValuesPeriod)
+      meterActor ! MeterActor.Start(power)
+
+    case Charging -> _ =>
+      meterActor ! MeterActor.Stop
+      cancelTimer("meterValueTimer")
   }
 
   whenUnhandled {
     case Event(StateRequest(sendNotification), _) =>
       sender ! getState(sendNotification)
+      stay()
+
+    case Event(MeterValue(_), _) =>
+      import akka.pattern.pipe
+      readMeterAsync.pipeTo(sender)
       stay()
 
     case Event(SwipeCard(_), _) =>
@@ -78,8 +94,8 @@ class ConnectorActor(service: ConnectorService)
   }
 
   onTermination {
-    case StopEvent(_, Charging, ChargingData(transactionId, meterValue)) =>
-      service.stopSession(None, transactionId, meterValue)
+    case StopEvent(_, Charging, ChargingData(transactionId)) =>
+      service.stopSession(None, transactionId, readMeter)
       println(getLog.mkString("\n\t"))
   }
 
@@ -105,22 +121,27 @@ class ConnectorActor(service: ConnectorService)
     import com.thenewmotion.ocpp.messages.AuthorizationStatus.Accepted
 
     if (service.authorize(rfid)) {
-      service.startSession(rfid, initialMeterValue) match {
+      service.startSession(rfid, readMeter) match {
         case (sessionId, Accepted) =>
           service.charging()
-          goto(Charging) using ChargingData(sessionId, initialMeterValue)
+          goto(Charging) using ChargingData(sessionId)
         case (_, _) =>
           stay()
       }
-
     }
     else stay()
+  }
+
+  private def readMeter: Int = Await.result(readMeterAsync, 5.seconds)
+
+  private def readMeterAsync: Future[Int] = {
+    meterActor.ask(MeterActor.Read)(Timeout(5.seconds))
+      .mapTo[Int]
+      .fallbackTo(Future.successful(0))
   }
 }
 
 object ConnectorActor {
-  val initialMeterValue = 100
-
   sealed trait State
   case object Available extends State
   case object Preparing extends State
@@ -134,13 +155,15 @@ object ConnectorActor {
   case object Plug extends Action
   case object Unplug extends Action
   case class SwipeCard(rfid: String) extends Action
-  case class StateRequest(sendNotification: Boolean) extends Action
   case object Fault
+  case object SendMeterValue
 
   sealed abstract class Data
   case object NoData extends Data
   case class ConnectorSettings(power: Double = 3.7, sendMeterValuesPeriod: Int = 20) extends Data
-  case class ChargingData(transactionId: Int, meterValue: Int) extends Data
+  case class ChargingData(transactionId: Int) extends Data
 
-  case object SendMeterValue
+  sealed trait Request
+  case class StateRequest(sendNotification: Boolean) extends Request
+  case class MeterValue(sendNotification: Boolean) extends Request
 }

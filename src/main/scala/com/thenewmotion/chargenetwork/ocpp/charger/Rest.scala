@@ -9,13 +9,17 @@ import akka.util.Timeout
 
 import scala.concurrent.duration._
 import akka.pattern.{AskableActorRef, ask}
-import com.thenewmotion.chargenetwork.ocpp.charger.ChargerActor.StateRequest
+import com.thenewmotion.chargenetwork.ocpp.charger.ChargerActor._
+import io.swagger.annotations.Api
+//import javax.ws.rs.Path
 
 import scala.concurrent.Await
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
 
-object WebServer {
+@Api(value = "/charger", produces = "application/json")
+//@Path("/charger")
+class Rest {
   implicit val timeout: Timeout = Timeout(60.seconds)
   implicit val marshaller: ToEntityMarshaller[AnyRef] = JacksonSupport.JacksonMarshaller
 
@@ -47,45 +51,79 @@ object WebServer {
       } else {
         complete(StatusCodes.NotFound, s"Connector $chargerId:$connectorId not found")
       }
-    } ~ path("showconnectors") {
-      post {
-        showConnectors(chargerActor, sendNotification = true)
-      } ~ get {
-        showConnectors(chargerActor, sendNotification = false)
+    } ~
+    showConnectors(chargerActor) ~
+    showConnectorsWithNotification(chargerActor)
+  }
+
+  private def connectorActions(chargerActor: ActorRef, connectorId: Int): Route = {
+    post {
+      plug(chargerActor, connectorId) ~
+      unplug(chargerActor, connectorId) ~
+      swipeCard(chargerActor, connectorId) ~
+      readMeterAndNotify(chargerActor, connectorId)
+    } ~
+    get {
+      path("meter") {
+        val result = ask[MeterValue, Int](chargerActor, MeterValue(connectorId), 0)
+        complete(Map(connectorId + 1 -> result))
+      } ~
+      pathEnd {
+        completeWithConnectorState(chargerActor, connectorId)
       }
     }
   }
 
-  private def connectorActions(chargerActor: ActorRef, connectorId: Int): Route = {
-    import ChargerActor.{Plug, Unplug, SwipeCard}
+  private def plug(chargerActor: ActorRef, connectorId: Int): Route = {
+    path("plug") {
+      chargerActor ! Plug(connectorId)
+      completeWithConnectorState(chargerActor, connectorId)
+    }
+  }
 
-    post {
-      path("plug") {
-        chargerActor ! Plug(connectorId)
+  private def unplug(chargerActor: ActorRef, connectorId: Int): Route = {
+    path("unplug") {
+      chargerActor ! Unplug(connectorId)
+      completeWithConnectorState(chargerActor, connectorId)
+    }
+  }
+
+  private def swipeCard(chargerActor: ActorRef, connectorId: Int): Route = {
+    path("swipecard") {
+      entity(as[String]) { rfid =>
+        chargerActor ! SwipeCard(connectorId, rfid)
         completeWithConnectorState(chargerActor, connectorId)
-      } ~
-      path("unplug") {
-        chargerActor ! Unplug(connectorId)
-        completeWithConnectorState(chargerActor, connectorId)
-      } ~
-      path("swipecard") {
-        entity(as[String]) { rfid =>
-          chargerActor ! SwipeCard(connectorId, rfid)
-          completeWithConnectorState(chargerActor, connectorId)
-          completeWithConnectorState(chargerActor, connectorId)
-        }
-      }
-    } ~
-    pathEnd {
-      get {
         completeWithConnectorState(chargerActor, connectorId)
       }
+    }
+  }
+
+  private def readMeterAndNotify(chargerActor: ActorRef, connectorId: Int): Route = {
+    path("meter") {
+      val result = ask[MeterValue, Int](chargerActor, MeterValue(connectorId, sendNotification = true), 0)
+      complete(Map(connectorId + 1 -> result))
     }
   }
 
   private def completeWithConnectorState(chargerActor: AskableActorRef, connectorId: Int): Route = {
     val result = ask[StateRequest, ConnectorActor.State](chargerActor, StateRequest(connectorId), ConnectorActor.Faulted)
     complete(Map(connectorId + 1 -> result.toString))
+  }
+
+  private def showConnectors(chargerActor: ActorRef): Route = {
+    path("showconnectors") {
+      get {
+        showConnectors(chargerActor, sendNotification = false)
+      }
+    }
+  }
+
+  private def showConnectorsWithNotification(chargerActor: ActorRef): Route = {
+    path("showconnectors") {
+      post {
+        showConnectors(chargerActor, sendNotification = true)
+      }
+    }
   }
 
   private def showConnectors(chargerActor: ActorRef, sendNotification: Boolean): Route = {
@@ -98,4 +136,3 @@ object WebServer {
   }
 }
 
-case class ConnectorStatus(status: String)

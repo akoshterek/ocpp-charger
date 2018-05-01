@@ -27,7 +27,7 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
     ("MeterValueSampleInterval", (false, Some(60.toString)))
   )(Ordering.by(_.toLowerCase))
 
-  var connectorActors: Vector[ActorRef] = Vector()
+  lazy val connectorActors: Vector[ActorRef] = (0 until numberOfConnectors).map(startConnector).toVector
 
   override def preStart() {
     val interval = service.boot()
@@ -36,8 +36,6 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
     }
     context.system.scheduler.schedule(1 second, interval, self, Heartbeat)
     scheduleFault()
-
-    connectorActors = (0 until numberOfConnectors).map(startConnector).toVector
   }
 
   def scheduleFault() {
@@ -164,6 +162,10 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
         future.pipeTo(sender)
       }
       stay()
+
+    case Event(MeterValue(c, sendNotification), _) =>
+      forward(ConnectorActor.MeterValue(sendNotification), c)
+      stay()
   }
 
   onTermination {
@@ -185,7 +187,7 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
     connector(c) ! msg
   }
 
-  def forward(msg: ConnectorActor.Action, c: Int) {
+  def forward(msg: ConnectorActor.Request, c: Int) {
     connector(c).forward(msg)
   }
 }
@@ -209,6 +211,7 @@ object ChargerActor {
   case class Unplug(connector: Int) extends UserAction
   case class SwipeCard(connector: Int, card: String) extends UserAction
   case class StateRequest(connector: Int, sendNotification: Boolean = false) extends UserAction
+  case class MeterValue(connector: Int, sendNotification: Boolean = false) extends UserAction
 
   object Resolver {
     def name(chargerId: String): String = "charger$" + chargerId

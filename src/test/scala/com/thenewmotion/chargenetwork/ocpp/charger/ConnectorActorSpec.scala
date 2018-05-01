@@ -47,7 +47,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     "not start charging when card is accepted but concurrent transaction is going on" in new ConnectorActorScope {
       actor.setState(stateName = Preparing)
       service.authorize(rfid) returns true
-      service.startSession(rfid, ConnectorActor.initialMeterValue) returns ((12345, ConcurrentTx))
+      service.startSession(rfid, MeterActor.initialTicks) returns ((12345, ConcurrentTx))
 
       actor receive SwipeCard(rfid)
 
@@ -58,19 +58,19 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     "start charging when card accepted" in new ConnectorActorScope {
       actor.setState(stateName = Preparing)
       service.authorize(rfid) returns true
-      service.startSession(rfid, ConnectorActor.initialMeterValue) returns ((12345, Accepted))
+      service.startSession(rfid, MeterActor.initialTicks) returns ((12345, Accepted))
 
       actor receive SwipeCard(rfid)
 
       actor.stateName mustEqual Charging
-      actor.stateData mustEqual ChargingData(12345, ConnectorActor.initialMeterValue)
+      actor.stateData mustEqual ChargingData(12345)
 
       there was one(service).authorize(rfid)
-      there was one(service).startSession(rfid, ConnectorActor.initialMeterValue)
+      there was one(service).startSession(rfid, MeterActor.initialTicks)
     }
 
     "continue charging when card declined" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue))
+      actor.setState(stateName = Charging, stateData = ChargingData(12345))
       service.authorize(rfid) returns false
 
       actor receive SwipeCard(rfid)
@@ -80,7 +80,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     }
 
     "stop charging when card accepted" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue))
+      actor.setState(stateName = Charging, stateData = ChargingData(12345))
       service.authorize(rfid) returns true
       service.stopSession(card = ===(Some(rfid)), transactionId = ===(12345), meterValue = any) returns true
 
@@ -93,7 +93,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     }
 
     "not stop charging when card declined" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue))
+      actor.setState(stateName = Charging, stateData = ChargingData(12345))
       service.authorize(rfid) returns false
 
       actor receive SwipeCard(rfid)
@@ -103,10 +103,10 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     }
 
     "stop charging on termination" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345, ConnectorActor.initialMeterValue))
+      actor.setState(stateName = Charging, stateData = ChargingData(12345))
       Await.ready(system.terminate(), new FiniteDuration(5, TimeUnit.SECONDS))
 
-      there was one(service).stopSession(None, 12345, ConnectorActor.initialMeterValue)
+      there was one(service).stopSession(None, 12345, MeterActor.initialTicks * 10)
     }
   }
 

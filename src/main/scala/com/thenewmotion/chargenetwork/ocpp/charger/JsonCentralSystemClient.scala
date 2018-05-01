@@ -94,13 +94,13 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
         notSupported("Cancel Reservation")
 
       def clearChargingProfile(req: ClearChargingProfileReq): Future[ClearChargingProfileRes] =
-        notSupported("Clear Charging Profile")
+        Future.successful(ClearChargingProfileRes(ClearChargingProfileStatus.Unknown))
 
       def getCompositeSchedule(req: GetCompositeScheduleReq): Future[GetCompositeScheduleRes] =
         Future.successful(GetCompositeScheduleRes(CompositeScheduleStatus.Rejected))
 
       def setChargingProfile(req: SetChargingProfileReq): Future[SetChargingProfileRes] =
-        notSupported("Set Charging Profile")
+        Future.successful(SetChargingProfileRes(ChargingProfileStatus.NotSupported))
 
       def triggerMessage(req: TriggerMessageReq): Future[TriggerMessageRes] =
         Future.successful(TriggerMessageRes(TriggerMessageStatus.NotImplemented))
