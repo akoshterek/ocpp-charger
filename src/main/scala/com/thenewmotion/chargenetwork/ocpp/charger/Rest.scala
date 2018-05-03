@@ -10,16 +10,12 @@ import akka.util.Timeout
 import scala.concurrent.duration._
 import akka.pattern.{AskableActorRef, ask}
 import com.thenewmotion.chargenetwork.ocpp.charger.ChargerActor._
-import io.swagger.annotations.Api
-//import javax.ws.rs.Path
 
 import scala.concurrent.Await
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
 
-@Api(value = "/charger", produces = "application/json")
-//@Path("/charger")
-class Rest {
+object Rest {
   implicit val timeout: Timeout = Timeout(60.seconds)
   implicit val marshaller: ToEntityMarshaller[AnyRef] = JacksonSupport.JacksonMarshaller
 
@@ -135,4 +131,3 @@ class Rest {
     complete(result)
   }
 }
-

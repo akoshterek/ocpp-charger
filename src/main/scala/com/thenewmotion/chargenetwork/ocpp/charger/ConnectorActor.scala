@@ -3,6 +3,7 @@ package com.thenewmotion.chargenetwork.ocpp.charger
 import akka.actor._
 import akka.pattern.ask
 import akka.util.Timeout
+import com.thenewmotion.ocpp.messages.StopReason
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
@@ -22,11 +23,17 @@ class ConnectorActor(service: ConnectorService)
     case Event(Plug, _) =>
       service.preparing()
       goto(Preparing)
+
+    case Event(RemoteStartTransaction(rfid), _) =>
+      remoteStartTransaction(rfid)
   }
 
   when(Preparing) {
     case Event(SwipeCard(rfid), _)  =>
       swipeCardStartTransaction(rfid)
+
+    case Event(RemoteStartTransaction(rfid), _) =>
+      remoteStartTransaction(rfid)
 
     case Event(Unplug, _) =>
       service.available()
@@ -34,23 +41,40 @@ class ConnectorActor(service: ConnectorService)
   }
 
   when(Charging) {
-    case Event(SwipeCard(rfid), ChargingData(transactionId)) =>
-      if (service.authorize(rfid) && service.stopSession(Some(rfid), transactionId, readMeter)) {
+    case Event(SwipeCard(rfid), ChargingData(transactionId, transactionRfid)) =>
+      if (transactionRfid == rfid
+        && service.authorize(rfid)
+        && service.stopSession(Some(rfid), transactionId, readMeter)) {
         service.finishing()
         goto(Finishing) using NoData
       }
       else stay()
 
-    case Event(SendMeterValue, ChargingData(transactionId)) =>
+    case Event(SendMeterValue, ChargingData(transactionId, _)) =>
       log.debug("Sending meter value")
       service.meterValue(transactionId, readMeter)
       stay()
 
-    case Event(MeterValue(true), ChargingData(transactionId)) =>
+    case Event(MeterValueRequest(true), ChargingData(transactionId, _)) =>
       val meterValue = readMeter
       service.meterValue(transactionId, meterValue)
       sender ! meterValue
       stay()
+
+    case Event(RemoteStopTransaction(transactionIdToStop), ChargingData(transactionId, _)) =>
+      if (transactionIdToStop == transactionId) {
+        service.stopSession(None, transactionId, readMeter, StopReason.Remote)
+        service.available()
+        goto(Available) using NoData
+      } else {
+        stay()
+      }
+
+    case Event(UnlockConnector, ChargingData(transactionId, _)) =>
+      service.stopSession(None, transactionId, readMeter, StopReason.UnlockCommand)
+      service.available()
+      sender ! true
+      goto(Available)
 
     case Event(_: Action, _) => stay()
   }
@@ -58,6 +82,9 @@ class ConnectorActor(service: ConnectorService)
   when(Finishing) {
     case Event(SwipeCard(rfid), _)  =>
       swipeCardStartTransaction(rfid)
+
+    case Event(RemoteStartTransaction(rfid), _) =>
+      remoteStartTransaction(rfid)
 
     case Event(Unplug, _) =>
       service.available()
@@ -79,9 +106,13 @@ class ConnectorActor(service: ConnectorService)
       sender ! getState(sendNotification)
       stay()
 
-    case Event(MeterValue(_), _) =>
+    case Event(MeterValueRequest(_), _) =>
       import akka.pattern.pipe
       readMeterAsync.pipeTo(sender)
+      stay()
+
+    case Event(StateDataRequest, _) =>
+      sender ! stateData
       stay()
 
     case Event(SwipeCard(_), _) =>
@@ -91,10 +122,17 @@ class ConnectorActor(service: ConnectorService)
       power = cs.power
       sendMeterValuesPeriod = cs.sendMeterValuesPeriod
       stay()
+
+    case Event(UnlockConnector, _) =>
+      if (stateName != Available) {
+        service.available()
+        sender ! true
+      }
+      goto(Available)
   }
 
   onTermination {
-    case StopEvent(_, Charging, ChargingData(transactionId)) =>
+    case StopEvent(_, Charging, ChargingData(transactionId, _)) =>
       service.stopSession(None, transactionId, readMeter)
       println(getLog.mkString("\n\t"))
   }
@@ -124,7 +162,7 @@ class ConnectorActor(service: ConnectorService)
       service.startSession(rfid, readMeter) match {
         case (sessionId, Accepted) =>
           service.charging()
-          goto(Charging) using ChargingData(sessionId)
+          goto(Charging) using ChargingData(sessionId, rfid)
         case (_, _) =>
           stay()
       }
@@ -134,7 +172,9 @@ class ConnectorActor(service: ConnectorService)
     }
   }
 
-  private def readMeter: Int = Await.result(readMeterAsync, 505.seconds)
+  private def remoteStartTransaction(rfid: String): State = swipeCardStartTransaction(rfid)
+
+  private def readMeter: Int = Await.result(readMeterAsync, 5.seconds)
 
   private def readMeterAsync: Future[Int] = {
     meterActor.ask(MeterActor.Read)(Timeout(5.seconds))
@@ -157,15 +197,20 @@ object ConnectorActor {
   case object Plug extends Action
   case object Unplug extends Action
   case class SwipeCard(rfid: String) extends Action
+  case class RemoteStartTransaction(rfid: String) extends Action
+  case class RemoteStopTransaction(transactionId: Int) extends Action
+  case object UnlockConnector extends Action
   case object Fault
   case object SendMeterValue
 
   sealed abstract class Data
   case object NoData extends Data
-  case class ConnectorSettings(power: Double = 3.7, sendMeterValuesPeriod: Int = 20) extends Data
-  case class ChargingData(transactionId: Int) extends Data
+
+  case class ChargingData(transactionId: Int, rfid: String) extends Data
 
   sealed trait Request
   case class StateRequest(sendNotification: Boolean) extends Request
-  case class MeterValue(sendNotification: Boolean) extends Request
+  case class ConnectorSettings(power: Double = 3.7, sendMeterValuesPeriod: Int = 20) extends Request
+  case class MeterValueRequest(sendNotification: Boolean) extends Request
+  case object StateDataRequest extends Request
 }

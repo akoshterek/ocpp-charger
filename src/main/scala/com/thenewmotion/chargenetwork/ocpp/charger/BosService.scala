@@ -28,7 +28,7 @@ trait ConnectorService {
   def authorize(card: String): Boolean
   def startSession(card: String, meterValue: Int): (Int, AuthorizationStatus)
   def meterValue(transactionId: Int, meterValue: Int)
-  def stopSession(card: Option[String], transactionId: Int, meterValue: Int): Boolean
+  def stopSession(card: Option[String], transactionId: Int, meterValue: Int, stopReason: StopReason = StopReason.default): Boolean
 }
 
 trait Common {
@@ -113,7 +113,7 @@ class ConnectorServiceImpl(protected val service: SyncCentralSystem, connectorId
     service(MeterValuesReq(ConnectorScope(connectorId), Some(transactionId), List(meter)))
   }
 
-  def stopSession(card: Option[String], transactionId: Int, meterValue: Int): Boolean =
-    service(StopTransactionReq(transactionId, card, ChargerClock.now, meterValue, StopReason.default, Nil))
+  def stopSession(card: Option[String], transactionId: Int, meterValue: Int, stopReason: StopReason = StopReason.default): Boolean =
+    service(StopTransactionReq(transactionId, card, ChargerClock.now, meterValue, stopReason, Nil))
       .idTag.exists(_.status == AuthorizationStatus.Accepted)
 }

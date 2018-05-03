@@ -10,8 +10,7 @@ import com.thenewmotion.ocpp.messages._
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
-import com.thenewmotion.ocpp.json._
-import com.thenewmotion.ocpp.json.api.{ChargePointRequestHandler, OcppError, OcppException}
+import com.thenewmotion.ocpp.json.api.{ChargePointRequestHandler, OcppError}
 import com.thenewmotion.ocpp.json.api.client.OcppJsonClient
 import com.thenewmotion.ocpp.soap.CentralSystemClient
 
@@ -53,17 +52,17 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
       def getConfiguration(req: GetConfigurationReq): Future[GetConfigurationRes] =
         askCharger(req)
 
-      def remoteStartTransaction(q: RemoteStartTransactionReq): Future[RemoteStartTransactionRes] =
-        notSupported("Remote Start Transaction")
+      def remoteStartTransaction(req: RemoteStartTransactionReq): Future[RemoteStartTransactionRes] =
+        askCharger(req)
 
-      def remoteStopTransaction(q: RemoteStopTransactionReq): Future[RemoteStopTransactionRes] =
-        notSupported("Remote Stop Transaction")
+      def remoteStopTransaction(req: RemoteStopTransactionReq): Future[RemoteStopTransactionRes] =
+        askCharger(req)
 
-      def unlockConnector(q: UnlockConnectorReq): Future[UnlockConnectorRes] =
-        notSupported("Unlock Connector")
+      def unlockConnector(req: UnlockConnectorReq): Future[UnlockConnectorRes] =
+        askCharger(req)
 
       def getDiagnostics(req: GetDiagnosticsReq): Future[GetDiagnosticsRes] =
-        notSupported("Get Diagnostics")
+        Future.successful(GetDiagnosticsRes(None))
 
       def changeConfiguration(req: ChangeConfigurationReq): Future[ChangeConfigurationRes] =
         askCharger(req)
@@ -85,13 +84,13 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
       def getLocalListVersion: Future[GetLocalListVersionRes] = askCharger(GetLocalListVersionReq)
 
       def dataTransfer(q: ChargePointDataTransferReq): Future[ChargePointDataTransferRes] =
-        notSupported("Data Transfer")
+        Future.successful(ChargePointDataTransferRes(DataTransferStatus.Rejected))
 
       def reserveNow(q: ReserveNowReq): Future[ReserveNowRes] =
-        notSupported("Reserve Now")
+        Future.successful(ReserveNowRes(Reservation.Rejected))
 
       def cancelReservation(q: CancelReservationReq): Future[CancelReservationRes] =
-        notSupported("Cancel Reservation")
+        Future.successful(CancelReservationRes(false))
 
       def clearChargingProfile(req: ClearChargingProfileReq): Future[ClearChargingProfileRes] =
         Future.successful(ClearChargingProfileRes(ClearChargingProfileStatus.Unknown))
@@ -104,12 +103,6 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
 
       def triggerMessage(req: TriggerMessageReq): Future[TriggerMessageRes] =
         Future.successful(TriggerMessageRes(TriggerMessageStatus.NotImplemented))
-
-      def notSupported(opName: String): Future[Nothing] =
-        Future.failed(OcppException(
-          PayloadErrorCode.NotSupported,
-          s"OCPP Charger Simulator doesn't support $opName"
-        ))
     }
   }
 

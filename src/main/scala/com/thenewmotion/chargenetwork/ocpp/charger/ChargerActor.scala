@@ -1,6 +1,7 @@
 package com.thenewmotion.chargenetwork.ocpp.charger
 
 import akka.actor._
+import akka.pattern.ask
 import akka.util.Timeout
 import com.thenewmotion.ocpp.messages.UpdateStatusWithoutHash.VersionMismatch
 
@@ -47,18 +48,73 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
 
   when(Available) {
     case Event(Plug(c), PluggedConnectors(cs)) =>
-      if (!cs.contains(c)) dispatch(ConnectorActor.Plug, c)
-      stay() using PluggedConnectors(cs + c)
+      if (c < numberOfConnectors) {
+        if (!cs.contains(c)) dispatch(ConnectorActor.Plug, c)
+        stay() using PluggedConnectors(cs + c)
+      } else stay()
+
     case Event(Unplug(c), PluggedConnectors(cs)) =>
-      if (cs.contains(c)) dispatch(ConnectorActor.Unplug, c)
-      stay() using PluggedConnectors(cs - c)
+      if (c < numberOfConnectors) {
+        if (cs.contains(c)) dispatch(ConnectorActor.Unplug, c)
+        stay() using PluggedConnectors(cs - c)
+      } else stay()
+
     case Event(SwipeCard(c, card), PluggedConnectors(cs)) =>
       if (cs.contains(c)) {
-        connector(c) ! ConnectorActor.ConnectorSettings(11,
-          chargerParameters.getOrElse("MeterValueSampleInterval", (false, Some("20")))._2.map(s => s.toInt).getOrElse(20))
+        sendConnectorSettings(connector(c))
         dispatch(ConnectorActor.SwipeCard(card), c)
       }
       stay()
+
+    case Event(RemoteStartTransactionReq(idTag, maybeConnectorScope, _), PluggedConnectors(cs)) =>
+      if (maybeConnectorScope.nonEmpty && maybeConnectorScope.get.id < numberOfConnectors) {
+        val c = maybeConnectorScope.get.id
+
+        Await.result(askConnectorState(c, sendNotification = false), 30.seconds) match {
+          case ConnectorActor.Charging | ConnectorActor.Faulted =>
+            sender ! RemoteStartTransactionRes(false)
+            stay()
+          case _ =>
+            sendConnectorSettings(connector(c))
+            sender ! RemoteStartTransactionRes(true)
+            dispatch(ConnectorActor.RemoteStartTransaction(idTag), c)
+            stay() using PluggedConnectors(cs + c)
+        }
+      } else {
+        sender ! RemoteStartTransactionRes(false)
+        stay()
+      }
+
+    case Event(RemoteStopTransactionReq(transactionIdToStop), PluggedConnectors(cs)) =>
+      val maybeTransaction = cs.map(c => (c, askConnectorStateData(c)))
+        .map(pair => {
+          val typedFuture = pair._2.mapTo[ConnectorActor.Data].fallbackTo(Future.successful(ChargerActor.NoData))
+          (pair._1, Await.result(typedFuture, 30.seconds))
+        })
+        .find(pair => pair._2 match {
+          case ConnectorActor.ChargingData(transactionId, _) => transactionId == transactionIdToStop
+          case _ => false
+        })
+
+      if (maybeTransaction.nonEmpty) {
+        dispatch(ConnectorActor.RemoteStopTransaction(transactionIdToStop), maybeTransaction.get._1)
+        sender ! RemoteStopTransactionRes(true)
+        stay() using PluggedConnectors(cs - maybeTransaction.get._1)
+      } else {
+        sender ! RemoteStopTransactionRes(false)
+        stay()
+      }
+
+    case Event(UnlockConnectorReq(c), PluggedConnectors(cs)) =>
+      if (cs.contains(c.id)) {
+        Await.ready(connector(c.id).ask(ConnectorActor.UnlockConnector)(30.seconds), 30.seconds)
+        sender ! UnlockConnectorRes(UnlockStatus.Unlocked)
+        stay() using PluggedConnectors(cs - c.id)
+      } else {
+        sender ! UnlockConnectorRes(if (c.id < numberOfConnectors) UnlockStatus.Unlocked else UnlockStatus.UnlockFailed)
+        stay()
+      }
+
     case Event(Fault, _) =>
       service.fault()
       goto(Faulted) forMax 5.seconds
@@ -69,6 +125,7 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
       service.available()
       scheduleFault()
       goto(Available)
+
     case Event(_: UserAction, _) => stay()
   }
 
@@ -148,15 +205,10 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
       if (c >= 0) {
         forward(ConnectorActor.StateRequest(sendNotification), c)
       } else {
-        import akka.pattern.ask
         import akka.pattern.pipe
 
         val future = Future.sequence(
-          connectorActors.map(c => {
-            c.ask(ConnectorActor.StateRequest(sendNotification))(Timeout(30.seconds))
-              .mapTo[ConnectorActor.State]
-              .fallbackTo(Future.successful(ConnectorActor.Faulted))
-          })
+          connectorActors.zipWithIndex.map(c => askConnectorState(c._2, sendNotification))
         )
 
         future.pipeTo(sender)
@@ -164,7 +216,7 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
       stay()
 
     case Event(MeterValue(c, sendNotification), _) =>
-      forward(ConnectorActor.MeterValue(sendNotification), c)
+      forward(ConnectorActor.MeterValueRequest(sendNotification), c)
       stay()
   }
 
@@ -184,6 +236,23 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
 
   def forward(msg: ConnectorActor.Request, c: Int) {
     connector(c).forward(msg)
+  }
+
+  def askConnectorState(c: Int, sendNotification: Boolean): Future[ConnectorActor.State] = {
+      connector(c).ask(ConnectorActor.StateRequest(sendNotification))(Timeout(30.seconds))
+        .mapTo[ConnectorActor.State]
+        .fallbackTo(Future.successful(ConnectorActor.Faulted))
+  }
+
+  def askConnectorStateData(c: Int): Future[ConnectorActor.Data] = {
+    connector(c).ask(ConnectorActor.StateDataRequest)(Timeout(30.seconds))
+      .mapTo[ConnectorActor.Data]
+      .fallbackTo(Future.successful(ConnectorActor.NoData))
+  }
+
+  def sendConnectorSettings(c: ActorRef): Unit = {
+    c ! ConnectorActor.ConnectorSettings(config.connectorPower(),
+      chargerParameters.getOrElse("MeterValueSampleInterval", (false, Some("60")))._2.map(s => s.toInt).getOrElse(60))
   }
 }
 

@@ -63,14 +63,14 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
       actor receive SwipeCard(rfid)
 
       actor.stateName mustEqual Charging
-      actor.stateData mustEqual ChargingData(12345)
+      actor.stateData mustEqual ChargingData(12345, rfid)
 
       there was one(service).authorize(rfid)
       there was one(service).startSession(rfid, MeterActor.initialTicks * 10)
     }
 
     "continue charging when card declined" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345))
+      actor.setState(stateName = Charging, stateData = ChargingData(12345, rfid))
       service.authorize(rfid) returns false
 
       actor receive SwipeCard(rfid)
@@ -80,7 +80,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     }
 
     "stop charging when card accepted" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345))
+      actor.setState(stateName = Charging, stateData = ChargingData(12345, rfid))
       service.authorize(rfid) returns true
       service.stopSession(card = ===(Some(rfid)), transactionId = ===(12345), meterValue = any) returns true
 
@@ -93,7 +93,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     }
 
     "not stop charging when card declined" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345))
+      actor.setState(stateName = Charging, stateData = ChargingData(12345, rfid))
       service.authorize(rfid) returns false
 
       actor receive SwipeCard(rfid)
@@ -103,7 +103,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
     }
 
     "stop charging on termination" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345))
+      actor.setState(stateName = Charging, stateData = ChargingData(12345, rfid))
       Await.ready(system.terminate(), new FiniteDuration(5, TimeUnit.SECONDS))
 
       there was one(service).stopSession(===(None), ===(12345), anyInt)
