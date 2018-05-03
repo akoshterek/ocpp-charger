@@ -22,8 +22,9 @@ class ChargerConfig(args: Seq[String]) extends ScallopConf(args) {
   val passId = opt[String]("pass-id", descr = "RFID of pass to try to start sessions with", default = Some("3E60A5E2"))
   val protocolVersion = opt[String]("protocol-version", descr = "OCPP version (either \"1.2\" or \"1.5\"", default = Some("1.6"))
   val connectionType = opt[String]("connection-type", descr = "whether to use WebSocket/JSON or HTTP/SOAP (either  \"json\" or \"soap\")", default = Some("json"))
-  val listenPort = opt[Int]("listen", descr = "TCP port to listen on for remote commands (SOAP)", default = Some(8084.toShort))
-  val listenApiPort = opt[Int]("listen-api", descr = "TCP port to listen on for REST API", default = Some(8184.toShort))
+  val listenPort = opt[Int]("listen", descr = "TCP port to listen on for remote commands (SOAP)", default = Some(8084))
+  val listenApiPort = opt[Int]("listen-api", descr = "TCP port to listen on for REST API", default = Some(8184))
+  val reconnectAfter = opt[Int]("reconnect", descr = "Reconnect after <arg> seconds in case of disconnect (JSON). 0 means no reconnect", default = Some(60))
 
 
   val simulateUser = toggle("user-simulation", descrYes = "Simulate user activity", descrNo = "Don't simulate user activity",  default = Some(false))
@@ -48,7 +49,15 @@ class ChargerConfig(args: Seq[String]) extends ScallopConf(args) {
       else Left("Invalid connector power: " + p)
   }
 
+  validate (reconnectAfter) {
+    p =>
+      if (p >= 0) Right(Unit)
+      else Left("Invalid reconnect timeout: " + p)
+  }
+
   private def validatePort(p: Int): Either[String, Unit] =
     if (p > 0 && p <= 65535) Right(Unit)
     else Left("Wrong port number: " + p)
+
+  verify()
 }

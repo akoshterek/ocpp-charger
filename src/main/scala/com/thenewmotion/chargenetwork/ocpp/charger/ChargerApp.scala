@@ -36,9 +36,9 @@ object ChargerApp {
           config.chargerId(),
           config.numberOfConnectors(),
           url,
-          config.authPassword.get,
+          config.authPassword.toOption,
           config
-        )(config.keystoreFile.get.fold(SSLContext.getDefault) { keystoreFile =>
+        )(config.keystoreFile.toOption.fold(SSLContext.getDefault) { keystoreFile =>
           SslContext(keystoreFile, config.keystorePassword())
         })
       } else {

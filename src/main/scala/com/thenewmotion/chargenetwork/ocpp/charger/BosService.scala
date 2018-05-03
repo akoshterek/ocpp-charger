@@ -54,11 +54,11 @@ class BosServiceImpl(val chargerId: String, protected val service: SyncCentralSy
     chargePointModel = config.model(),
     chargePointSerialNumber = Some(config.serial()),
     chargeBoxSerialNumber = None, //deprecated
-    firmwareVersion = config.firmwareVersion.get,
-    iccid = config.iccid.get,
-    imsi = config.imsi.get,
-    meterType = config.meterType.get,
-    meterSerialNumber = config.meterSerial.get)).interval
+    firmwareVersion = config.firmwareVersion.toOption,
+    iccid = config.iccid.toOption,
+    imsi = config.imsi.toOption,
+    meterType = config.meterType.toOption,
+    meterSerialNumber = config.meterSerial.toOption)).interval
 
   private val errorCodes = ErrorCodes().iterator
 
@@ -78,9 +78,6 @@ class BosServiceImpl(val chargerId: String, protected val service: SyncCentralSy
 }
 
 class ConnectorServiceImpl(protected val service: SyncCentralSystem, connectorId: Int) extends ConnectorService with Common {
-
-  private val random = new Random()
-
   def preparing() {
     notification(Occupied(Some(OccupancyKind.Preparing), Some("Preparing")), Some(connectorId))
   }

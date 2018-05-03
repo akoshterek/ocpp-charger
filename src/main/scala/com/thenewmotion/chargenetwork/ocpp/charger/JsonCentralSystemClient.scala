@@ -2,13 +2,13 @@ package com.thenewmotion.chargenetwork.ocpp.charger
 
 import com.typesafe.scalalogging.slf4j.LazyLogging
 import java.net.URI
-import javax.net.ssl.SSLContext
 
+import javax.net.ssl.SSLContext
 import akka.actor.ActorRef
 import com.thenewmotion.ocpp.Version
 import com.thenewmotion.ocpp.messages._
 
-import scala.concurrent.{Await, Future}
+import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.concurrent.duration._
 import com.thenewmotion.ocpp.json.api.{ChargePointRequestHandler, OcppError}
 import com.thenewmotion.ocpp.json.api.client.OcppJsonClient
@@ -42,10 +42,70 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
     case None => throw new RuntimeException("Unable to find an actor");
   }
 
-  val client : OcppJsonClient = new OcppJsonClient(chargeBoxIdentity, centralSystemUri, Seq(version), authPassword) {
+  private def createClient = new OcppJsonClientV16(chargeBoxIdentity, centralSystemUri, Seq(version), authPassword)
+
+  var client : OcppJsonClient = createClient
+
+  def syncSend[REQ <: CentralSystemReq, RES <: CentralSystemRes](req: REQ)
+                                                                (implicit reqRes: CentralSystemReqRes[REQ, RES]): RES = {
+    val res = Await.result(client.send(req), 60.seconds)
+    logger.info("{}\n\t>> {}\n\t<< {}", chargeBoxIdentity, req, res)
+    res
+  }
+
+  def askCharger[REQ <: ChargePointReq, RES <: ChargePointRes](req: REQ)
+                                                              (implicit tag: ClassTag[RES]): Future[RES] = {
+    import akka.pattern.ask
+    chargerActor.ask(req)(30.seconds).asInstanceOf[Future[RES]]
+  }
+
+  def authorize(req: AuthorizeReq): AuthorizeRes = syncSend[AuthorizeReq, AuthorizeRes](req)
+
+  def bootNotification(req: BootNotificationReq): BootNotificationRes = syncSend[BootNotificationReq, BootNotificationRes](req)
+
+  def dataTransfer(req: CentralSystemDataTransferReq): CentralSystemDataTransferRes = syncSend[CentralSystemDataTransferReq, CentralSystemDataTransferRes](req)
+
+  def diagnosticsStatusNotification(req: DiagnosticsStatusNotificationReq): Unit = syncSend(req)
+
+  def firmwareStatusNotification(req: FirmwareStatusNotificationReq): Unit = syncSend(req)
+
+  def heartbeat: HeartbeatRes = syncSend(HeartbeatReq)
+
+  def meterValues(req: MeterValuesReq): Unit = syncSend(req)
+
+  def startTransaction(req: StartTransactionReq): StartTransactionRes = syncSend(req)
+
+  def statusNotification(req: StatusNotificationReq): Unit = syncSend(req)
+
+  def stopTransaction(req: StopTransactionReq): StopTransactionRes = syncSend(req)
+
+  private def executeAfterDeadline(d: Deadline, f: => Unit): Unit =
+    Future(Await.ready(Promise().future, d.timeLeft)) onComplete (_ => f)
+
+  override def close(): Unit = {
+    client.connection.close()
+  }
+
+  private class OcppJsonClientV16(chargerId: String,
+                                  centralSystemUri: URI,
+                                  versions: Seq[Version],
+                                  authPassword: Option[String] = None
+                                 )(implicit override val ec: ExecutionContext,
+                                   sslContext: SSLContext = SSLContext.getDefault
+                                 ) extends OcppJsonClient(chargeBoxIdentity, centralSystemUri, versions, authPassword) {
     def onError(err: OcppError): Unit = logger.error(s"Received OCPP error $err")
 
-    def onDisconnect: Unit = logger.error("WebSocket disconnected for charger {}" , chargeBoxIdentity)
+    def onDisconnect: Unit = {
+      logger.error(s"WebSocket disconnected for charger $chargeBoxIdentity")
+      val reconnectAfter = config.reconnectAfter().seconds
+      if (reconnectAfter.length > 0) {
+        logger.error(s"Reconnecting in $reconnectAfter")
+        executeAfterDeadline(reconnectAfter.fromNow, {
+          client = createClient
+          logger.info(s"WebSocket reconnected for charger $chargeBoxIdentity")
+        })
+      }
+    }
 
     val requestHandler: ChargePointRequestHandler = new ChargePoint {
 
@@ -104,42 +164,5 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
       def triggerMessage(req: TriggerMessageReq): Future[TriggerMessageRes] =
         Future.successful(TriggerMessageRes(TriggerMessageStatus.NotImplemented))
     }
-  }
-
-  def syncSend[REQ <: CentralSystemReq, RES <: CentralSystemRes](req: REQ)
-                                                                (implicit reqRes: CentralSystemReqRes[REQ, RES]): RES = {
-    val res = Await.result(client.send(req), 60.seconds)
-    logger.info("{}\n\t>> {}\n\t<< {}", chargeBoxIdentity, req, res)
-    res
-  }
-
-  def askCharger[REQ <: ChargePointReq, RES <: ChargePointRes](req: REQ)
-                                                              (implicit tag: ClassTag[RES]): Future[RES] = {
-    import akka.pattern.ask
-    chargerActor.ask(req)(30.seconds).asInstanceOf[Future[RES]]
-  }
-
-  def authorize(req: AuthorizeReq): AuthorizeRes = syncSend[AuthorizeReq, AuthorizeRes](req)
-
-  def bootNotification(req: BootNotificationReq): BootNotificationRes = syncSend[BootNotificationReq, BootNotificationRes](req)
-
-  def dataTransfer(req: CentralSystemDataTransferReq): CentralSystemDataTransferRes = syncSend[CentralSystemDataTransferReq, CentralSystemDataTransferRes](req)
-
-  def diagnosticsStatusNotification(req: DiagnosticsStatusNotificationReq): Unit = syncSend(req)
-
-  def firmwareStatusNotification(req: FirmwareStatusNotificationReq): Unit = syncSend(req)
-
-  def heartbeat: HeartbeatRes = syncSend(HeartbeatReq)
-
-  def meterValues(req: MeterValuesReq): Unit = syncSend(req)
-
-  def startTransaction(req: StartTransactionReq): StartTransactionRes = syncSend(req)
-
-  def statusNotification(req: StatusNotificationReq): Unit = syncSend(req)
-
-  def stopTransaction(req: StopTransactionReq): StopTransactionRes = syncSend(req)
-
-  override def close(): Unit = {
-    client.connection.close()
   }
 }
