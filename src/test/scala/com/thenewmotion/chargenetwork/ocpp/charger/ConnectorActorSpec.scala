@@ -69,27 +69,17 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
       there was one(service).startSession(rfid, MeterActor.initialTicks * 10)
     }
 
-    "continue charging when card declined" in new ConnectorActorScope {
-      actor.setState(stateName = Charging, stateData = ChargingData(12345, rfid))
-      service.authorize(rfid) returns false
-
-      actor receive SwipeCard(rfid)
-      actor.stateName mustEqual Charging
-
-      there was one(service).authorize(rfid)
-    }
-
     "stop charging when card accepted" in new ConnectorActorScope {
       actor.setState(stateName = Charging, stateData = ChargingData(12345, rfid))
       service.authorize(rfid) returns true
-      service.stopSession(card = ===(Some(rfid)), transactionId = ===(12345), meterValue = any) returns true
+      service.stopSession(card = ===(Some(rfid)), transactionId = ===(12345), any, any) returns true
 
       actor receive SwipeCard(rfid)
       actor.stateName mustEqual Finishing
       actor.stateData mustEqual NoData
 
       there was one(service).authorize(rfid)
-      there was one(service).stopSession(===(Some(rfid)), ===(12345), any)
+      there was one(service).stopSession(===(Some(rfid)), ===(12345), any, any)
     }
 
     "not stop charging when card declined" in new ConnectorActorScope {
@@ -99,14 +89,23 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
       actor receive SwipeCard(rfid)
       actor.stateName mustEqual Charging
       there was one(service).authorize(rfid)
-      there was no(service).stopSession(any, any, any)
+      there was no(service).stopSession(any, any, any, any)
+    }
+
+    "not stop charging when other card was used" in new ConnectorActorScope {
+      actor.setState(stateName = Charging, stateData = ChargingData(12345, rfid))
+      actor receive SwipeCard(rfid + "other")
+
+      actor.stateName mustEqual Charging
+      there was no(service).authorize(any)
+      there was no(service).stopSession(any, any, any, any)
     }
 
     "stop charging on termination" in new ConnectorActorScope {
       actor.setState(stateName = Charging, stateData = ChargingData(12345, rfid))
       Await.ready(system.terminate(), new FiniteDuration(5, TimeUnit.SECONDS))
 
-      there was one(service).stopSession(===(None), ===(12345), anyInt)
+      there was one(service).stopSession(===(None), ===(12345), any, any)
     }
   }
 

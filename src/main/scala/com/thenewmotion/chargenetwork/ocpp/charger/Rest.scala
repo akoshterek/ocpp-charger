@@ -20,6 +20,12 @@ object Rest {
   implicit val marshaller: ToEntityMarshaller[AnyRef] = JacksonSupport.JacksonMarshaller
 
   val route: Route = {
+    pathPrefix("charger" / "shutdown") {
+      post {
+        system.terminate().onComplete(sys.exit())
+        complete(StatusCodes.Accepted)
+      }
+    } ~
     pathPrefix("charger" / Segment) { chargerId =>
       ChargerActor.Resolver.resolve(chargerId) match {
         case None =>
