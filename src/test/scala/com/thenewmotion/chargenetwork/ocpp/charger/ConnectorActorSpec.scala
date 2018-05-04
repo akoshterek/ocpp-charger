@@ -145,6 +145,13 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
       there was no(service).authorize(any)
       there was one(service).stopSession(any, any, any, === (StopReason.UnlockCommand))
     }
+
+    "unplug charging when UnlockConnector received" in new ConnectorActorScope {
+      actor.setState(stateName = Preparing)
+
+      actor receive UnlockConnector
+      actor.stateName mustEqual Available
+    }
   }
 
   class ConnectorActorScope
