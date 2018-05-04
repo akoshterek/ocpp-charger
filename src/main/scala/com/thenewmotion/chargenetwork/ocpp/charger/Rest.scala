@@ -22,7 +22,9 @@ object Rest {
   val route: Route = {
     pathPrefix("charger" / "shutdown") {
       post {
-        system.terminate().onComplete(sys.exit())
+        executeAfterDeadline(1.second.fromNow, {
+          system.terminate().onComplete(sys.exit())
+        })
         complete(StatusCodes.Accepted)
       }
     } ~

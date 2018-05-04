@@ -8,7 +8,7 @@ import akka.actor.ActorRef
 import com.thenewmotion.ocpp.Version
 import com.thenewmotion.ocpp.messages._
 
-import scala.concurrent.{Await, ExecutionContext, Future, Promise}
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 import com.thenewmotion.ocpp.json.api.{ChargePointRequestHandler, OcppError}
 import com.thenewmotion.ocpp.json.api.client.OcppJsonClient
@@ -79,9 +79,6 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
 
   def stopTransaction(req: StopTransactionReq): StopTransactionRes = syncSend(req)
 
-  private def executeAfterDeadline(d: Deadline, f: => Unit): Unit =
-    Future(Await.ready(Promise().future, d.timeLeft)) onComplete (_ => f)
-
   override def close(): Unit = {
     client.connection.close()
   }
@@ -95,7 +92,7 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
                                  ) extends OcppJsonClient(chargeBoxIdentity, centralSystemUri, versions, authPassword) {
     def onError(err: OcppError): Unit = logger.error(s"Received OCPP error $err")
 
-    def onDisconnect: Unit = {
+    def onDisconnect(): Unit = {
       logger.error(s"WebSocket disconnected for charger $chargeBoxIdentity")
       val reconnectAfter = config.reconnectAfter().seconds
       if (reconnectAfter.length > 0) {

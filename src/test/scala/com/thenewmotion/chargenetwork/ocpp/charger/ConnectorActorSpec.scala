@@ -9,7 +9,9 @@ import org.specs2.mock.Mockito
 import org.specs2.specification.Scope
 import akka.actor.ActorSystem
 import ConnectorActor._
+import com.thenewmotion.ocpp.messages
 import com.thenewmotion.ocpp.messages.AuthorizationStatus._
+import com.thenewmotion.ocpp.messages.StopReason
 
 import scala.concurrent.Await
 import scala.concurrent.duration.FiniteDuration
@@ -106,6 +108,42 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
       Await.ready(system.terminate(), new FiniteDuration(5, TimeUnit.SECONDS))
 
       there was one(service).stopSession(===(None), ===(12345), any, any)
+    }
+
+    "start charging when RemoteStartTransaction accepted" in new ConnectorActorScope {
+      actor.setState(stateName = Available)
+      service.authorize(rfid) returns true
+      service.startSession(rfid, MeterActor.initialTicks * 10) returns ((12345, Accepted))
+
+      actor receive RemoteStartTransaction(rfid)
+
+      actor.stateName mustEqual Charging
+      actor.stateData mustEqual ChargingData(12345, rfid)
+
+      there was one(service).authorize(rfid)
+      there was one(service).startSession(rfid, MeterActor.initialTicks * 10)
+    }
+
+    "stop charging when RemoteStopTransaction accepted" in new ConnectorActorScope {
+      actor.setState(stateName = Charging, stateData = ChargingData(12345, rfid))
+      service.stopSession(any, any, any, === (StopReason.Remote)) returns true
+
+      actor receive RemoteStopTransaction(12345)
+      actor.stateName mustEqual Available
+
+      there was no(service).authorize(any)
+      there was one(service).stopSession(any, any, any, === (StopReason.Remote))
+    }
+
+    "stop charging when UnlockConnector received" in new ConnectorActorScope {
+      actor.setState(stateName = Charging, stateData = ChargingData(12345, rfid))
+      service.stopSession(any, any, any, === (StopReason.UnlockCommand)) returns true
+
+      actor receive UnlockConnector
+      actor.stateName mustEqual Available
+
+      there was no(service).authorize(any)
+      there was one(service).stopSession(any, any, any, === (StopReason.UnlockCommand))
     }
   }
 
