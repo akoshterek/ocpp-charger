@@ -96,16 +96,16 @@ REST API is available after establishing connection with central system on 8184 
 ### APIs
 ```POST /charger/shutdown``` - shuts down the charger and terminates the application
 
-```POST /charger/{chargePointId}/{connectorId}/plug``` - plugs cable to the connector
+```POST /charger/{chargePointId}/{connectorId}/plug``` - plugs cable to the connector.
 
-```POST /charger/{chargePointId}/{connectorId}/unplug``` - unplugs cable from the connector
+```POST /charger/{chargePointId}/{connectorId}/unplug``` - unplugs cable from the connector.
 
-```POST /charger/{chargePointId}/{connectorId}/swipecard``` - swipes card. Starts/stops transactions if cable is connected
+```POST /charger/{chargePointId}/{connectorId}/swipecard``` - swipes card. Starts/stops transactions if cable is connected. POST body must contain card RFID.
 
-```POST /charger/{chargePointId}/{connectorId}/meter``` - reads connector meter values and sends MeterValues message in case of ongoing transaction
+```POST /charger/{chargePointId}/{connectorId}/meter``` - reads connector meter value and sends MeterValues message in case of ongoing transaction.
 
-```GET /charger/{chargePointId}/{connectorId}/meter``` - reads connector meter values
+```GET /charger/{chargePointId}/{connectorId}/meter``` - reads connector meter values.
 
-```GET /charger/{chargePointId}/showconnectors``` - returns state of all connectors
+```GET /charger/{chargePointId}/showconnectors``` - returns state of all connectors.
 
-```POST /charger/{chargePointId}/showconnectors``` - returns state of all connectors and forces sending StatusNotification message
+```POST /charger/{chargePointId}/showconnectors``` - returns state of all connectors and forces sending StatusNotification message.

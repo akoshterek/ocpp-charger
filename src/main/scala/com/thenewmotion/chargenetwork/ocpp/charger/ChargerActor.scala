@@ -24,7 +24,7 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
     ("chargerId", (true, Some(service.chargerId))),
     ("numberOfConnectors", (true, Some(numberOfConnectors.toString))),
     ("OCPP-Simulator", (true, None)),
-    ("AuthorizeRemoteTxRequests", (false, Some(true.toString))),
+    ("AuthorizeRemoteTxRequests", (true, Some(true.toString))),
     ("MeterValueSampleInterval", (false, Some(60.toString)))
   )(Ordering.by(_.toLowerCase))
 

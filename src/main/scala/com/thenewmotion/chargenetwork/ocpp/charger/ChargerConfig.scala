@@ -17,7 +17,7 @@ class ChargerConfig(args: Seq[String]) extends ScallopConf(args) {
   val imsi = opt[String]("imsi", descr = "Charge point SIM card IMSI", default = None)
   val meterType = opt[String]("meter-type", descr = "Charge point main meter type", default = Some("Dummy Meter"))
   val meterSerial = opt[String]("meter-serial", descr = "Charge point main meter serial number", default = Some("DUMMY-000001"))
-  val connectorPower = opt[Double]("connector-power", descr = "KWh per connector [3.7 - 22]", default = Some(11))
+  val connectorPower = opt[Double]("connector-power", descr = "kWh per connector [3.7 - 22]", default = Some(11))
 
   val passId = opt[String]("pass-id", descr = "RFID of pass to try to start sessions with", default = Some("3E60A5E2"))
   val protocolVersion = opt[String]("protocol-version", descr = "OCPP version (\"1.2\" or \"1.5\" or \"1.6\"", default = Some("1.6"))
