@@ -20,7 +20,7 @@ class ChargerConfig(args: Seq[String]) extends ScallopConf(args) {
   val connectorPower = opt[Double]("connector-power", descr = "KWh per connector [3.7 - 22]", default = Some(11))
 
   val passId = opt[String]("pass-id", descr = "RFID of pass to try to start sessions with", default = Some("3E60A5E2"))
-  val protocolVersion = opt[String]("protocol-version", descr = "OCPP version (either \"1.2\" or \"1.5\"", default = Some("1.6"))
+  val protocolVersion = opt[String]("protocol-version", descr = "OCPP version (\"1.2\" or \"1.5\" or \"1.6\"", default = Some("1.6"))
   val connectionType = opt[String]("connection-type", descr = "whether to use WebSocket/JSON or HTTP/SOAP (either  \"json\" or \"soap\")", default = Some("json"))
   val listenPort = opt[Int]("listen", descr = "TCP port to listen on for remote commands (SOAP)", default = Some(8084))
   val listenApiPort = opt[Int]("listen-api", descr = "TCP port to listen on for REST API", default = Some(8184))
