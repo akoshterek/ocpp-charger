@@ -5,6 +5,8 @@ val ocppCharger = project
     name := "ocpp-charger",
     organization := "com.thenewmotion.chargenetwork",
     description := "OCPP Charger Simulator",
+    fork := true,
+    connectInput := true,
 
     libraryDependencies ++= {
       val log = {
