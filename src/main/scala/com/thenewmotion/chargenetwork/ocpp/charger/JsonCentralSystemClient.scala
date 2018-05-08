@@ -35,7 +35,7 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
                                 (implicit sslContext: SSLContext = SSLContext.getDefault)
   extends CentralSystemClient with LazyLogging with AutoCloseable {
 
-  def version: Version.V16.type = Version.V16
+  def version: Version = Version.V16
 
   lazy val chargerActor: ActorRef = ChargerActor.Resolver.resolve(chargeBoxIdentity) match {
     case Some(actorRef) => actorRef
