@@ -46,7 +46,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
       there was one(service).authorize(rfid)
     }
 
-    "not start charging when card is accepted but concurrent transaction is going on" in new ConnectorActorScope {
+    "stop charging when card is accepted but concurrent transaction is going on" in new ConnectorActorScope {
       actor.setState(stateName = Preparing)
       service.authorize(rfid) returns true
       service.startSession(rfid, MeterActor.initialTicks * 10) returns ((12345, ConcurrentTx))
@@ -55,6 +55,7 @@ class ConnectorActorSpec extends SpecificationWithJUnit with Mockito {
 
       actor.stateName mustEqual Preparing
       there was one(service).authorize(rfid)
+      there was one(service).stopSession(===(Some(rfid)), ===(12345), any, any)
     }
 
     "start charging when card accepted" in new ConnectorActorScope {

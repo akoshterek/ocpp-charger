@@ -126,8 +126,8 @@ class ConnectorActor(service: ConnectorService)
     case Event(UnlockConnector, _) =>
       if (stateName != Available) {
         service.available()
-        sender ! true
       }
+      sender ! true
       goto(Available)
   }
 
@@ -163,7 +163,8 @@ class ConnectorActor(service: ConnectorService)
         case (sessionId, Accepted) =>
           service.charging()
           goto(Charging) using ChargingData(sessionId, rfid)
-        case (_, _) =>
+        case (sessionId, _) =>
+          service.stopSession(Some(rfid), sessionId, readMeter)
           stay()
       }
     }
