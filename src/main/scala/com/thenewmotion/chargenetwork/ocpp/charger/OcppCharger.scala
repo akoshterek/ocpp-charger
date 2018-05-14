@@ -34,11 +34,12 @@ class OcppSoapCharger(chargerId: String,
 
 class OcppJsonCharger(chargerId: String,
                       numConnectors: Int,
+                      ocppVersion: Version,
                       centralSystemUri: URI,
                       authPassword: Option[String],
                       config: ChargerConfig)
                      (implicit sslContext: SSLContext = SSLContext.getDefault) extends OcppCharger {
-  val client = JsonCentralSystemClient(chargerId, Version.V16, centralSystemUri, authPassword, config)
+  val client = JsonCentralSystemClient(chargerId, ocppVersion, centralSystemUri, authPassword, config)
   val chargerActor: ActorRef = system.actorOf(
     Props(new ChargerActor(BosService(chargerId, client, config), numConnectors, config)),
     ChargerActor.Resolver.name(chargerId))

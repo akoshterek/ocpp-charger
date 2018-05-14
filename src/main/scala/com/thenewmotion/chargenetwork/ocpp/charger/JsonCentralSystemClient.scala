@@ -23,19 +23,18 @@ object JsonCentralSystemClient {
             authPassword: Option[String],
             config: ChargerConfig
            )(implicit sslContext: SSLContext = SSLContext.getDefault): CentralSystemClient = version match {
+    case Version.V15 => new JsonCentralSystemClientV15(chargeBoxIdentity, centralSystemUri, authPassword, config)(sslContext)
     case Version.V16 => new JsonCentralSystemClientV16(chargeBoxIdentity, centralSystemUri, authPassword, config)(sslContext)
     case _ => throw new IllegalArgumentException("Wrong OCPP version")
   }
 }
 
-class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
+abstract class JsonCentralSystemClient(val chargeBoxIdentity: String,
                                  centralSystemUri: URI,
                                  authPassword: Option[String],
                                  config: ChargerConfig)
                                 (implicit sslContext: SSLContext = SSLContext.getDefault)
   extends CentralSystemClient with LazyLogging with AutoCloseable {
-
-  def version: Version = Version.V16
 
   lazy val chargerActor: ActorRef = ChargerActor.Resolver.resolve(chargeBoxIdentity) match {
     case Some(actorRef) => actorRef
@@ -162,4 +161,22 @@ class JsonCentralSystemClientV16(val chargeBoxIdentity: String,
         Future.successful(TriggerMessageRes(TriggerMessageStatus.NotImplemented))
     }
   }
+}
+
+class JsonCentralSystemClientV15(chargeBoxIdentity: String,
+                                 centralSystemUri: URI,
+                                 authPassword: Option[String],
+                                 config: ChargerConfig)
+                                (implicit sslContext: SSLContext = SSLContext.getDefault)
+  extends JsonCentralSystemClient(chargeBoxIdentity, centralSystemUri, authPassword, config)(sslContext) {
+  def version: Version = Version.V15
+}
+
+class JsonCentralSystemClientV16(chargeBoxIdentity: String,
+                                       centralSystemUri: URI,
+                                       authPassword: Option[String],
+                                       config: ChargerConfig)
+                                      (implicit sslContext: SSLContext = SSLContext.getDefault)
+  extends JsonCentralSystemClient(chargeBoxIdentity, centralSystemUri, authPassword, config)(sslContext) {
+  def version: Version = Version.V16
 }

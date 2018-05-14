@@ -18,7 +18,7 @@ object ChargerApp {
     val config = ChargerConfig(args)
 
     val version = try {
-      Version.withName(config.protocolVersion())
+      Version.withName(config.protocolVersion()).get
     } catch {
       case _: NoSuchElementException => sys.error(s"Unknown protocol version ${config.protocolVersion()}")
     }
@@ -35,6 +35,7 @@ object ChargerApp {
         new OcppJsonCharger(
           config.chargerId(),
           config.numberOfConnectors(),
+          version,
           url,
           config.authPassword.toOption,
           config
@@ -46,7 +47,7 @@ object ChargerApp {
         new OcppSoapCharger(
           config.chargerId(),
           config.numberOfConnectors(),
-          version.get,
+          version,
           url,
           server,
           config
