@@ -65,7 +65,7 @@ class ConnectorActor(service: ConnectorService)
       if (transactionIdToStop == transactionId) {
         service.stopSession(None, transactionId, readMeter, StopReason.Remote)
         service.available()
-        goto(Available) using NoData
+        goto(Available)
       } else {
         stay()
       }
