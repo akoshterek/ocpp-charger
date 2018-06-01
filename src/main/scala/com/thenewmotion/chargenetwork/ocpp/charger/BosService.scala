@@ -5,7 +5,6 @@ import com.thenewmotion.ocpp.messages._
 import com.thenewmotion.ocpp.messages.meter.{DefaultValue, Meter}
 
 import scala.concurrent.duration.FiniteDuration
-import scala.util.Random
 
 /**
  * @author Yaroslav Klymko
