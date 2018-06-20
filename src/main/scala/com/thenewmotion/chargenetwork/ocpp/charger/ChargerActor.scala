@@ -34,8 +34,10 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
     val interval = service.boot()
     Future {
       service.available()
+      connectorActors.foreach(c => c ! ConnectorActor.StateRequest(true))
     }
     context.system.scheduler.schedule(1 second, interval, self, Heartbeat)
+
     scheduleFault()
   }
 
