@@ -20,12 +20,13 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
   import ChargerActor._
 
   var localAuthList = LocalAuthList()
-  var chargerParameters: Map[String, (Boolean, Option[String])] = TreeMap[String, (Boolean, Option[String])](
-    ("chargerId", (true, Some(service.chargerId))),
-    ("numberOfConnectors", (true, Some(numberOfConnectors.toString))),
-    ("OCPP-Simulator", (true, None)),
-    ("AuthorizeRemoteTxRequests", (true, Some(true.toString))),
-    ("MeterValueSampleInterval", (false, Some(60.toString)))
+  var chargerParameters: Map[String, (Boolean, Boolean, Option[String])] = TreeMap[String, (Boolean, Boolean, Option[String])](
+    ("chargerId", (true, false, Some(service.chargerId))),
+    ("numberOfConnectors", (true, false, Some(numberOfConnectors.toString))),
+    ("OCPP-Simulator", (true, false, None)),
+    ("AuthorizeRemoteTxRequests", (true, false, Some(true.toString))),
+    ("MeterValueSampleInterval", (false, false, Some(60.toString))),
+    ("DummyRebootParameter", (false, true, Some("0")))
   )(Ordering.by(_.toLowerCase))
 
   lazy val connectorActors: Vector[ActorRef] = (0 until numberOfConnectors).map(startConnector).toVector
@@ -165,12 +166,12 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
     case Event(GetConfigurationReq(keys), _) =>
       val (values: List[KeyValue], unknownKeys: List[String]) =
         if (keys.isEmpty) chargerParameters.map {
-          case (key, (readonly, value)) => KeyValue(key, readonly, value)
+          case (key, (readonly, _, value)) => KeyValue(key, readonly, value)
         }.toList -> Nil
         else {
           val data = keys.map {
             key => key -> chargerParameters.get(key).map {
-              case (readonly, value) => KeyValue(key, readonly, value)
+              case (readonly, _, value) => KeyValue(key, readonly, value)
             }
           }
           val values = data.collect {
@@ -187,9 +188,10 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
 
     case Event(ChangeConfigurationReq(key, value), _) =>
       val status = chargerParameters.get(key) match {
-        case Some((true, _)) => ConfigurationStatus.Rejected
+        case Some((true, _, _)) => ConfigurationStatus.Rejected
+        case Some((false, true, _)) => ConfigurationStatus.RebootRequired
         case _ =>
-          chargerParameters = chargerParameters + (key -> (false -> Some(value)))
+          chargerParameters = chargerParameters + (key -> (false, false, Some(value)))
           ConfigurationStatus.Accepted
       }
       sender ! ChangeConfigurationRes(status)
@@ -254,7 +256,7 @@ class ChargerActor(service: BosService, numberOfConnectors: Int = 1, config: Cha
 
   def sendConnectorSettings(c: ActorRef): Unit = {
     c ! ConnectorActor.ConnectorSettings(config.connectorPower(),
-      chargerParameters.getOrElse("MeterValueSampleInterval", (false, Some("60")))._2.map(s => s.toInt).getOrElse(60))
+      chargerParameters.getOrElse("MeterValueSampleInterval", (false, false, Some("60")))._3.map(s => s.toInt).getOrElse(60))
   }
 }
 
