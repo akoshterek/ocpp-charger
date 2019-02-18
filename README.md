@@ -25,7 +25,7 @@ JSON API natively it could be more functional and performant.
     <dependency>
         <groupId>com.thenewmotion.chargenetwork</groupId>
         <artifactId>ocpp-charger_2.10</artifactId>
-        <version>2.6</version>
+        <version>2.6.1</version>
     </dependency>
     ```
 
@@ -109,3 +109,7 @@ REST API is available after establishing connection with central system on 8184 
 ```GET /charger/{chargePointId}/showconnectors``` - returns state of all connectors.
 
 ```POST /charger/{chargePointId}/showconnectors``` - returns state of all connectors and forces sending StatusNotification message.
+
+## License
+
+© 2012 - 2017 The New Motion B.V. Licensed under the terms of the [GPL version 3](LICENSE).

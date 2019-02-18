@@ -8,6 +8,10 @@ val ocppCharger = project
     fork in run := true,
     connectInput in run:= true,
 
+    scalaVersion := tnm.ScalaVersion.prev,
+
+    crossScalaVersions := Seq(tnm.ScalaVersion.prev),
+
     libraryDependencies ++= {
       val log = {
         Seq("ch.qos.logback" % "logback-classic" % "1.2.3",

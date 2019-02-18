@@ -17,6 +17,8 @@ object ChargerApp {
   def main(args: Array[String]) {
     val config = ChargerConfig(args)
 
+    config.verify()
+
     val version = try {
       Version.withName(config.protocolVersion()).get
     } catch {
