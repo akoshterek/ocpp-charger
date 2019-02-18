@@ -7,7 +7,6 @@ import scala.language.postfixOps
 class UserActor(charger: ActorRef, c: Int, actions: ActionIterator) extends Actor {
   import com.thenewmotion.chargenetwork.ocpp.charger.{ActionIterator => AT}
   import ChargerActor._
-  import context.dispatcher
 
   case object Act
 
