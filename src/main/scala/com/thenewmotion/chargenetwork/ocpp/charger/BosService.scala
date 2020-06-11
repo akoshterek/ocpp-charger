@@ -140,7 +140,7 @@ class ConnectorServiceImpl(protected val service: SyncCentralSystem, connectorId
       measurand = Measurand.EnergyActiveImportRegister,
       phase = None,
       location = Location.Outlet,
-      unit = UnitOfMeasure.Kw)
+      unit = UnitOfMeasure.Wh)
 
     val signedMeterReading: Value = meterValue.copy(context = ReadingContext.TransactionBegin,
       format = ValueFormat.SignedData, value = signedMeterValue)
