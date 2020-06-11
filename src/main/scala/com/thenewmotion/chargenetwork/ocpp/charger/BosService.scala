@@ -140,21 +140,17 @@ class ConnectorServiceImpl(protected val service: SyncCentralSystem, connectorId
       measurand = Measurand.EnergyActiveImportRegister,
       phase = None,
       location = Location.Outlet,
-      unit = UnitOfMeasure.Kwh)
+      unit = UnitOfMeasure.Kw)
 
     val signedMeterReading: Value = meterValue.copy(context = ReadingContext.TransactionBegin,
-      format = ValueFormat.SignedData, value = signedMeter)
+      format = ValueFormat.SignedData, value = signedMeterValue)
 
     Meter(ChargerClock.now, List(meterValue, signedMeterReading))
   }
 
-  def signedMeter: String = <values>
-    <value>
-      <signedData
-      format="ALFEN">AP;0;3;ALCV3ABBBISHMA2RYEGAZE3HV5YQBQRQAEHAR2MN;BIHEIWSHAAA2W2V7OYYDCNQAAAFACRC2I4ADGAETI4AAAABAOOJYUAGMXEGV4AIAAEEAB7Y6AAO3EAIAAAAAAABQGQ2UINJZGZATGMJTGQ4DAAAAAAAAAACXAAAABKYAAAAA====;R7KGQ3CEYTZI6AWKPOA42MXJTGBW27EUE2E6X7J77J5WMQXPSOM3E27NMVM2D77DPTMO3YACIPTRI===;
-      </signedData>
-    </value>
-  </values>.toString()
+  def signedMeterValue: String = "AP;0;3;ALCV3ABBBISHMA2RYEGAZE3HV5YQBQRQAEHAR2MN;BIHEIWSHAAA2W2V7OYYDCNQAAAFACRC2I4" +
+    "ADGAETI4AAAABAOOJYUAGMXEGV4AIAAEEAB7Y6AAO3EAIAAAAAAABQGQ2UINJZGZATGMJTGQ4DAAAAAAAAAACXAAAABKYAAAAA====;R7KGQ3CEY" +
+    "TZI6AWKPOA42MXJTGBW27EUE2E6X7J77J5WMQXPSOM3E27NMVM2D77DPTMO3YACIPTRI===;"
 
   def stopSession(card: Option[String], transactionId: Int, meterValue: Int, stopReason: StopReason = StopReason.default): Boolean =
     service(StopTransactionReq(transactionId, card, ChargerClock.now, meterValue, stopReason, Nil))
