@@ -159,16 +159,16 @@ class ConnectorServiceImpl(protected val service: SyncCentralSystem, connectorId
 
     def getMeterValuesOnStop: List[Value] = {
       val signedMeterStop = buildMeterValue(signedMeterValueStop, ReadingContext.TransactionEnd, ValueFormat.SignedData)
-      val signedMeterStart = buildMeterValue(signedMeterValueStart, ReadingContext.TransactionEnd, ValueFormat.SignedData)
+      val signedMeterStart = buildMeterValue(signedMeterValueStart, ReadingContext.TransactionBegin, ValueFormat.SignedData)
 
       List(signedMeterStart, signedMeterStop)
     }
 
-    def signedMetersOnStop: List[Meter] = {
+    def meterValues: List[Meter] = {
       if (config.isEichrechtCharger) List(Meter(ChargerClock.now, getMeterValuesOnStop)) else Nil
     }
 
-    service(StopTransactionReq(transactionId, card, ChargerClock.now, meterValue, stopReason, signedMetersOnStop))
+    service(StopTransactionReq(transactionId, card, ChargerClock.now, meterValue, stopReason, meterValues))
       .idTag.exists(_.status == AuthorizationStatus.Accepted)
   }
 }
