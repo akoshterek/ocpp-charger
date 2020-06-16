@@ -134,25 +134,41 @@ class ConnectorServiceImpl(protected val service: SyncCentralSystem, connectorId
   }
 
   def signedMeterValuesBeginTransaction(meter: Int): Meter = {
-    val meterValue: Value = Value(value = meter.toString,
-      context = ReadingContext.TransactionBegin,
-      format = ValueFormat.Raw,
-      measurand = Measurand.EnergyActiveImportRegister,
-      phase = None,
-      location = Location.Outlet,
-      unit = UnitOfMeasure.Wh)
 
-    val signedMeterReading: Value = meterValue.copy(context = ReadingContext.TransactionBegin,
-      format = ValueFormat.SignedData, value = signedMeterValue)
+    val meterValue: Value = buildMeterValue(meter.toString, ReadingContext.TransactionBegin, ValueFormat.Raw)
+
+    val signedMeterReading: Value = meterValue.copy(format = ValueFormat.SignedData, value = signedMeterValueStart)
 
     Meter(ChargerClock.now, List(meterValue, signedMeterReading))
   }
 
-  def signedMeterValue: String = "AP;0;3;ALCV3ABBBISHMA2RYEGAZE3HV5YQBQRQAEHAR2MN;BIHEIWSHAAA2W2V7OYYDCNQAAAFACRC2I4" +
+  def buildMeterValue(value: String, context: ReadingContext, format: ValueFormat) = {
+    Value(value, context, format, Measurand.EnergyActiveImportRegister, None, Location.Outlet, UnitOfMeasure.Kwh)
+  }
+
+  def signedMeterValueStart: String = "AP;0;3;ALCV3ABBBISHMA2RYEGAZE3HV5YQBQRQAEHAR2MN;BIHEIWSHAAA2W2V7OYYDCNQAAAFACRC2I4" +
     "ADGAETI4AAAABAOOJYUAGMXEGV4AIAAEEAB7Y6AAO3EAIAAAAAAABQGQ2UINJZGZATGMJTGQ4DAAAAAAAAAACXAAAABKYAAAAA====;R7KGQ3CEY" +
     "TZI6AWKPOA42MXJTGBW27EUE2E6X7J77J5WMQXPSOM3E27NMVM2D77DPTMO3YACIPTRI===;"
 
-  def stopSession(card: Option[String], transactionId: Int, meterValue: Int, stopReason: StopReason = StopReason.default): Boolean =
-    service(StopTransactionReq(transactionId, card, ChargerClock.now, meterValue, stopReason, Nil))
+
+  def stopSession(card: Option[String], transactionId: Int, meterValue: Int, stopReason: StopReason = StopReason.default): Boolean = {
+
+    def signedMeterValueStop: String = "AP;1;3;ALCV3ABBBISHMA2RYEGAZE3HV5YQBQRQAEHAR2MN;BIHEIWSHAAA2W2V7OYYDCNQAAAFACRC" +
+      "2I4ADGAETI4AAAAAQHCKIUAETXIGV4AIAAEEAB7Y6ACT3EAIAAAAAAABQGQ2UINJZGZATGMJTGQ4DAAAAAAAAAACXAAAABLAAAAAA====;" +
+      "HIWX6JKGDO3JARYVAQYKJO6XB7HFLMLNUUCDBOTWJFFC7IY3VWZGN7UPIVA26TMTK4S2GVXJ3BD4S===;"
+
+    def getMeterValuesOnStop: List[Value] = {
+      val signedMeterStop = buildMeterValue(signedMeterValueStop, ReadingContext.TransactionEnd, ValueFormat.SignedData)
+      val signedMeterStart = buildMeterValue(signedMeterValueStart, ReadingContext.TransactionEnd, ValueFormat.SignedData)
+
+      List(signedMeterStart, signedMeterStop)
+    }
+
+    def signedMetersOnStop: List[Meter] = {
+      if (config.isEichrechtCharger) List(Meter(ChargerClock.now, getMeterValuesOnStop)) else Nil
+    }
+
+    service(StopTransactionReq(transactionId, card, ChargerClock.now, meterValue, stopReason, signedMetersOnStop))
       .idTag.exists(_.status == AuthorizationStatus.Accepted)
+  }
 }
